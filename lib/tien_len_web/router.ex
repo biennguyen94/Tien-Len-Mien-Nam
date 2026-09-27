@@ -8,6 +8,7 @@ defmodule TienLenWeb.Router do
     plug :put_root_layout, html: {TienLenWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug TienLenWeb.PlayerIdentity
   end
 
   pipeline :api do

@@ -13,8 +13,11 @@ defmodule TienLen.RoomServer do
   - **Broadcasts** `{:room_updated, room_id, version, events}` on `topic(room_id)` after every
     change. Events are public facts only (plays, passes, joins…); subscribers fetch their own
     projection with `view/2`. Hands, undealt cards and seeds are never broadcast.
-  - Stops (`:normal`) when the last player leaves, or when nobody has been connected for the
-    disconnect timeout.
+  - Stops (`:normal`) when the last player leaves, when nobody has been connected for the
+    disconnect timeout, or when nobody joins within that time after creation (X9).
+  - Tells the lobby (`TienLen.Lobby.topic/0`) when its summary may have changed
+    (`{:lobby_updated, id}`) and when it closes (`{:room_closed, id}`).
+  - `view/2` answers only seated players: there are no spectators (#17).
 
   Options for `start_room/1`: `:id`, `:turn_timeout` and `:disconnect_timeout` (ms), `:deals` (a
   list of `TienLen.Room.deal()` used for successive games, for tests; otherwise a fresh
@@ -29,6 +32,8 @@ defmodule TienLen.RoomServer do
   @disconnect_timeout 20_000
   # events after which the (possibly same) current player gets a fresh turn timer
   @turn_events [:played, :chopped, :passed, :timed_out, :round_ended, :lead_moved, :game_started]
+  # events that change the lobby summary (player count, status, host)
+  @lobby_events [:joined, :left, :host_changed, :game_started, :game_over]
 
   # -- API ----------------------------------------------------------------------
 
@@ -78,8 +83,14 @@ defmodule TienLen.RoomServer do
   def pass(room_id, player_id), do: call(room_id, {:command, player_id, :pass})
   def chop(room_id, player_id, cards), do: call(room_id, {:command, player_id, {:chop, cards}})
 
-  @doc "The room as seen by `player_id`, plus `turn_ms_left` for the current turn."
+  @doc """
+  The room as seen by a seated `player_id`, plus `turn_ms_left` for the current turn.
+  Anyone not seated gets `{:error, :not_in_room}` (no spectators, #17).
+  """
   def view(room_id, player_id), do: call(room_id, {:view, player_id})
+
+  @doc "Public summary for the lobby list (no player ids, no cards)."
+  def summary(room_id), do: call(room_id, :summary)
 
   defp call(room_id, msg) do
     GenServer.call(via(room_id), msg)
@@ -112,7 +123,13 @@ defmodule TienLen.RoomServer do
        disconnect_timers: %{},
        # monitored pid => {player_id, monitor ref}
        pids: %{}
-     }}
+     }
+     |> tap(fn state -> Process.send_after(self(), :idle_check, state.disconnect_timeout) end)}
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    Phoenix.PubSub.broadcast(TienLen.PubSub, TienLen.Lobby.topic(), {:room_closed, state.id})
   end
 
   @impl true
@@ -151,16 +168,35 @@ defmodule TienLen.RoomServer do
   end
 
   def handle_call({:view, player_id}, _from, state) do
-    left =
-      case state.turn do
-        %{deadline: deadline} -> max(deadline - now(), 0)
-        nil -> nil
-      end
+    if Room.seat_of(state.room, player_id) == nil do
+      {:reply, {:error, :not_in_room}, state}
+    else
+      {:reply, Map.put(Room.view(state.room, player_id), :turn_ms_left, turn_ms_left(state)),
+       state}
+    end
+  end
 
-    {:reply, Map.put(Room.view(state.room, player_id), :turn_ms_left, left), state}
+  def handle_call(:summary, _from, state) do
+    room = state.room
+    host = room.host && room.seats[room.host]
+
+    summary = %{
+      id: state.id,
+      players: map_size(room.seats),
+      max_players: 4,
+      status: room.status,
+      host_name: host && host.name,
+      joinable: room.status == :waiting and map_size(room.seats) < 4
+    }
+
+    {:reply, summary, state}
   end
 
   @impl true
+  def handle_info(:idle_check, state) do
+    if map_size(state.room.seats) == 0, do: {:stop, :normal, state}, else: {:noreply, state}
+  end
+
   def handle_info({:DOWN, mref, :process, pid, _reason}, state) do
     case state.pids do
       %{^pid => {player_id, ^mref}} ->
@@ -240,8 +276,15 @@ defmodule TienLen.RoomServer do
       {:room_updated, state.id, state.version, events}
     )
 
+    if Enum.any?(events, &(elem(&1, 0) in @lobby_events)) do
+      Phoenix.PubSub.broadcast(TienLen.PubSub, TienLen.Lobby.topic(), {:lobby_updated, state.id})
+    end
+
     state
   end
+
+  defp turn_ms_left(%{turn: %{deadline: deadline}}), do: max(deadline - now(), 0)
+  defp turn_ms_left(_state), do: nil
 
   defp reschedule_turn(state, events) do
     current = Room.current_seat(state.room)

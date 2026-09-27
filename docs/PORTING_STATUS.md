@@ -10,12 +10,12 @@ Last updated: 2026-09-27
 | 4 | Rules engine | **DONE** (2026-09-27) |
 | 5 | Pure game state | **DONE** (2026-09-27) |
 | 6 | GameServer (room process) | **DONE** (2026-09-27) |
-| 7 | Lobby / rooms | NOT STARTED. Needs O3 |
+| 7 | Lobby / rooms | **DONE** (2026-09-27) |
 | 8 | LiveView UI | NOT STARTED. Needs O4 |
 | 9 | Realtime (PubSub, presence) | NOT STARTED |
 | 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
 
-Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6). The web layer is still the generator's default page.
+Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7). No UI yet beyond the generator's page. The web layer is still the generator's default page.
 
 ## Decisions
 
@@ -113,12 +113,12 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 |---|---|
 | O1 | **One Phoenix app at the repo root**, `--app tien_len --module TienLen`. Pure domain in `lib/tien_len/`, web layer in `lib/tien_len_web/`. (Owner accepted the proposal, 2026-09-27.) |
 | O2 | **No database** (`--no-ecto`, also `--no-mailer`): rooms and games live in memory; a restart ends running games. Ecto can be added later for accounts or history. (Accepted with O1; the generator needed it.) |
+| O3 | **Anonymous identity**: a random player id in the signed Phoenix session, a display name, and a signed seat token (`Phoenix.Token`) for reconnecting without a session. No accounts. (Owner asked to proceed with Phase 7 on the proposal, 2026-09-27.) |
 
 ## Open decisions (project-level, not game rules)
 
 | # | Question | Needed by | Proposal (ASSUMPTION until decided) |
 |---|---|---|---|
-| O3 | Player identity | Phase 7 | Anonymous: a display name plus a signed per-seat token (`Phoenix.Token`) stored in the session. No accounts. |
 | O4 | UI language / card selection | Phase 8 | Vietnamese UI (maybe English later). Click-to-select cards with a JS hook only for ordering, or reuse the original's drag-and-drop idea. Card SVGs: the original's are by Adrian Kennard, so check their licence before copying. |
 | O5 | Deployment | Phase 10 | Docker on WSL like `open-mu-web` (NOT decided). |
 
@@ -350,6 +350,56 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 
 - A flaky test ("room stops when the last player leaves") exposed a real issue: the `Registry` unregisters a dead process asynchronously, so `whereis/1` could briefly return a dead pid. `whereis/1` now treats a pid that is not alive as absent. Before the fix, the test failed 5 times in 20 runs.
 - New interpretations X6–X9, taken while implementing; see Interpretations.
+
+## Phase 7 results (2026-09-27)
+
+### Delivered
+
+- **`TienLen.Lobby`** (`lib/tien_len/lobby.ex`):
+  - `create_room/3` (the creator is seated as host);
+  - `join_room/3` (join or reconnect), `leave_room/2`, `start_game/2`;
+  - `room_view/2` (seated players only);
+  - `list_rooms/0`: public summaries `%{id, players, max_players, status, host_name, joinable}`, joinable rooms first;
+  - `normalize_name/1`: trim, collapse whitespace, 1–20 characters, Unicode allowed, no control characters, invalid UTF-8 rejected;
+  - `subscribe/0` to lobby updates.
+- **`TienLen.RoomServer` additions:**
+  - `summary/1`;
+  - `{:lobby_updated, id}` on joins, leaves, host changes, game start and game over, and `{:room_closed, id}` on termination;
+  - a room nobody joins closes after the disconnect timeout (X9);
+  - `view/2` refuses non-seated players (**no spectators**, #17).
+- **`TienLen.Room`:** a game ended by instant win at the deal now also emits `{:instant_win, winners}` and `{:game_over, ranking}`, so clients learn it from events.
+- **`TienLenWeb.PlayerIdentity`** (`lib/tien_len_web/player_identity.ex`, O3):
+  - a plug in the `:browser` pipeline that gives each session a random `player_id` (stored in the signed session cookie) and assigns `player_id` / `player_name`;
+  - `sign/1` / `verify/2` seat tokens (`Phoenix.Token`, 30-day max age).
+- The session cookie stays **signed** (not encrypted): the player id is not secret, only tamper-proof.
+
+### VERIFIED
+
+- `mix precommit`: **191 passed (2 doctests, 189 tests)**, no warnings; the full suite was run 10 times without failure.
+- **Lobby (13 tests):**
+  - name rules;
+  - the creator is host and the room is listed as joinable;
+  - a full room is not joinable and refuses a fifth player;
+  - mid-game join refused, reconnect allowed, non-host start refused;
+  - a single player cannot start;
+  - unknown room;
+  - listing order;
+  - summaries carry no player ids or cards;
+  - **no spectators**;
+  - lobby broadcasts for create, join, leave and close;
+  - an empty room closes by itself.
+- **PlayerIdentity (6 tests):**
+  - a new session gets a player id that persists across requests;
+  - sessions get distinct ids;
+  - a tampered session cookie does not keep the id;
+  - token round-trip;
+  - forged, garbage, missing, expired and other-salt tokens rejected;
+  - a verified token reconnects the player to their seat.
+
+### Notes
+
+- A test exposed a **real crash**: `normalize_name/1` raised `ArgumentError` on invalid UTF-8 input, because `String.trim/1` and the regex ran before the validity check. It is fixed: UTF-8 is checked first. Display names are user input, so this mattered.
+- Rooms are identified by a short random id. There are no room names yet; the lobby shows the host's name.
 
 ## Environment state
 

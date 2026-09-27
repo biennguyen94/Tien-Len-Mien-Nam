@@ -74,9 +74,11 @@ Tien-Len-Mien-Nam/
 - Tests: simultaneous out-of-turn chops (first valid wins); timers with injected clocks; crash isolation; the next-game leader.
 - Acceptance: invalid commands never crash the process; no broadcast contains hidden information.
 
-## Phase 7 — Lobby / rooms (T13)
+## Phase 7 — Lobby / rooms (T13) — DONE (2026-09-27)
 
-- [ ] Create/list/join/leave rooms; display name; seat tokens (O3); max 4 seats; no mid-game join; host-only start with ≥ 2 players; no spectators.
+- [x] Create/list/join/leave rooms; display name; seat tokens (O3); max 4 seats; no mid-game join; host-only start with ≥ 2 players; no spectators.
+- [x] Identity plug (random player id in the signed session); lobby PubSub updates; empty rooms close.
+- [x] Tests: 191 passing overall (see PORTING_STATUS → Phase 7 results).
 - Tests: full room, mid-game join refused, a non-host cannot start, token reconnect, forged token rejected.
 
 ## Phase 8 — LiveView UI

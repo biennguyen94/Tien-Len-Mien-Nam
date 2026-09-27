@@ -158,7 +158,17 @@ defmodule TienLen.Room do
         end
 
       room = %{room | status: :playing, game: game}
-      maybe_finish(room, [{:game_started, participants}])
+
+      events =
+        if Game.instant_win?(game),
+          do: [
+            {:game_started, participants},
+            {:instant_win, game.instant_winners},
+            {:game_over, game.ranking}
+          ],
+          else: [{:game_started, participants}]
+
+      maybe_finish(room, events)
     end
   end
 
