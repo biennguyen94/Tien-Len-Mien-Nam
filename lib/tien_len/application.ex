@@ -11,8 +11,9 @@ defmodule TienLen.Application do
       TienLenWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:tien_len, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: TienLen.PubSub},
-      # Start a worker by calling: TienLen.Worker.start_link(arg)
-      # {TienLen.Worker, arg},
+      # One TienLen.RoomServer per room, looked up by room id.
+      {Registry, keys: :unique, name: TienLen.RoomRegistry},
+      {DynamicSupervisor, name: TienLen.RoomSupervisor, strategy: :one_for_one},
       # Start to serve requests, typically the last entry
       TienLenWeb.Endpoint
     ]

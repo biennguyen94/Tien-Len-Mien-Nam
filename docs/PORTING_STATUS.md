@@ -9,13 +9,13 @@ Last updated: 2026-09-27
 | 3 | Combination engine | **DONE** (2026-09-27) |
 | 4 | Rules engine | **DONE** (2026-09-27) |
 | 5 | Pure game state | **DONE** (2026-09-27) |
-| 6 | GameServer (room process) | NOT STARTED |
+| 6 | GameServer (room process) | **DONE** (2026-09-27) |
 | 7 | Lobby / rooms | NOT STARTED. Needs O3 |
 | 8 | LiveView UI | NOT STARTED. Needs O4 |
 | 9 | Realtime (PubSub, presence) | NOT STARTED |
 | 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
 
-Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5). The web layer is still the generator's default page.
+Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6). The web layer is still the generator's default page.
 
 ## Decisions
 
@@ -102,6 +102,10 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 | X3 | Host rights transfer after the 20 s disconnect timeout, not on the first disconnect. |
 | X4 | If the leader of a card-led opening is removed before the first play, the lead moves to the next active seat **without** an opening-card requirement (the mandatory card was discarded with their hand). (Phase 5) |
 | X5 | An out-of-turn four-pair is allowed on **any** chop target, including a combination the chopper played themselves; nothing in T10 excludes it. (Phase 5) |
+| X6 | A new game is dealt only to **connected** seated players. A disconnected player keeps their seat and joins the next game after reconnecting. (Phase 6) |
+| X7 | Host transfer (S6) goes to the next seat in seat order **that is connected**, if any; otherwise to the next seated player. (Phase 6) |
+| X8 | **Leaving** the room (as opposed to disconnecting) during a game removes the player from the game at once (like a disconnect timeout), frees the seat, and passes host rights at once. (Phase 6) |
+| X9 | A room closes when its last player leaves, or when a disconnect timeout expires and nobody in the room is connected. (Phase 6) |
 
 ### Project decisions
 
@@ -293,6 +297,59 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 
 - The first version of the simulation never produced `:chopped` or `:lead_moved` (random deals almost never hold a four-pair when a 2 is on the table, and the bot never removed the current seat). That was fixed by rigging deals, keeping four-pairs intact in the bot, and allowing removal of any active seat. It was a test-coverage gap, not a code bug.
 - X4 and X5 are new interpretations taken while implementing; see Interpretations.
+
+## Phase 6 results (2026-09-27)
+
+### Delivered
+
+- **`TienLen.Room`** (`lib/tien_len/room.ex`), pure.
+  - Seats `0..3` (ascending seat order = turn order). The first player is host.
+  - `join/3`: a new player takes the first free seat, or the same player id reconnects. Refused when full or mid-game (R6).
+  - `leave/2`, `disconnect/2`, `disconnect_timeout/2` (S5, S6, X3, X7, X8).
+  - `start_game/3`: host only, ≥ 2 connected players (X6). The deal is a seed or `{:hands, …}` for tests.
+  - `command/3`: `{:play, cards}`, `:pass`, `{:chop, cards}`.
+  - `turn_timeout/1`, `view/2`.
+  - Next-game leader: `last_winner` (player id) leads if taking part (R1). `nil` after an instant win (I5) or if the winner left (R4).
+- **`TienLen.RoomServer`** (`lib/tien_len/room_server.ex`), a GenServer per room under a `DynamicSupervisor` (`TienLen.RoomSupervisor`) and a `Registry` (`TienLen.RoomRegistry`), both added to `TienLen.Application`. `restart: :temporary`, since there is no DB (O2).
+  - **API:** `start_room/1` (random id or `:id`), `join/3`, `leave/2`, `start_game/2`, `play/3`, `pass/2`, `chop/3`, `view/2` (adds `turn_ms_left`), `subscribe/1`, `topic/1`, `whereis/1`.
+  - **Commands are serialised** by the process.
+  - **Turn timer:** 20 s, configurable. It restarts when the turn changes hands or the current player acts; stale timer messages are ignored by ref.
+  - **Disconnect timer:** 20 s, configurable. Connections are tracked by **monitoring the joining process** (the LiveView later). A player with several tabs is disconnected only when all of them are gone. Joining again cancels the timer.
+  - **Broadcast** `{:room_updated, id, version, events}`: events only. Subscribers fetch their own `view/2`.
+- Connection tracking uses process monitors, not `Phoenix.Presence`. Presence is not needed for the rules; Phase 9 can still add it for a "who is online" display.
+
+### VERIFIED
+
+- `mix precommit`: **172 passed (2 doctests, 170 tests)**, no warnings.
+- **Room (18 tests):**
+  - seat filling and fifth player refused;
+  - reconnect to the same seat;
+  - no new join mid-game;
+  - host-only start with ≥ 2 players;
+  - disconnected players not dealt;
+  - command routing and errors;
+  - a scripted full game → ranking `[[0], [3], [1], [2]]`, and the winner leads the next game;
+  - instant win → next game card-led;
+  - winner left → card-led;
+  - leave / disconnect-timeout removal with host transfer;
+  - removal down to one player ends the game;
+  - `view/2`.
+- **RoomServer (11 tests):**
+  - lifecycle, duplicate ids, unknown room, room stops after the last leave;
+  - bad input (junk cards, wrong types, strangers) never crashes the process;
+  - **concurrent out-of-turn four-pairs**: whichever arrives first, the higher one ends on top and play continues after its owner;
+  - a turn timeout auto-plays the mandatory 3♠, then auto-passes;
+  - **a whole 4-player game finished purely by 2 ms turn timeouts, with every broadcast scanned: no card appears that was not played**;
+  - a killed player process → disconnected → removed after the timeout, host moved;
+  - reconnect before the timeout cancels removal;
+  - two tabs;
+  - the room stops when nobody is connected.
+- **Flakiness check:** the RoomServer tests were run 30 times and the full suite 10 times after the fix below, with 0 failures.
+
+### Notes
+
+- A flaky test ("room stops when the last player leaves") exposed a real issue: the `Registry` unregisters a dead process asynchronously, so `whereis/1` could briefly return a dead pid. `whereis/1` now treats a pid that is not alive as absent. Before the fix, the test failed 5 times in 20 runs.
+- New interpretations X6–X9, taken while implementing; see Interpretations.
 
 ## Environment state
 

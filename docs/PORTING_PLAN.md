@@ -65,11 +65,12 @@ Tien-Len-Mien-Nam/
 - Tests: the RULES §16 scenarios end to end; property tests (card conservation, exactly one current seat while playing, never a pass on a lead, the game ends with N − 1 finishers or an instant win); timeout actions (X1).
 - Acceptance: no command can act for another seat, except a valid out-of-turn four-pair.
 
-## Phase 6 — Room process (T13, T15, T16, T17)
+## Phase 6 — Room process (T13, T15, T16, T17) — DONE (2026-09-27)
 
-- [ ] `TienLen.Room` (pure): seats, host, sequence of games, leader for the next game (R1, R4, I5).
-- [ ] `TienLen.RoomServer` GenServer: serialises commands; turn timer (20 s); disconnect timer (20 s) → `remove`; host transfer (S6, X3); PubSub broadcast of an event only (views are projected per subscriber).
-- [ ] Registry + DynamicSupervisor; room lifecycle (the room closes when empty).
+- [x] `TienLen.Room` (pure): seats, host, sequence of games, leader for the next game (R1, R4, I5).
+- [x] `TienLen.RoomServer` GenServer: serialises commands; turn timer (20 s); disconnect timer (20 s) → `remove`; host transfer (S6, X3, X7); PubSub broadcast of events only (views are projected per subscriber). Connections via process monitors.
+- [x] Registry + DynamicSupervisor; room lifecycle (the room closes when empty, X9).
+- [x] Tests: 172 passing overall; timing tests repeated 30× without failure (see PORTING_STATUS → Phase 6 results).
 - Tests: simultaneous out-of-turn chops (first valid wins); timers with injected clocks; crash isolation; the next-game leader.
 - Acceptance: invalid commands never crash the process; no broadcast contains hidden information.
 
