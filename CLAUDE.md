@@ -9,7 +9,7 @@ Read `docs/` before doing any work. Do not re-analyse the original repo from scr
 | | Stack | Status |
 |---|---|---|
 | **Original** | React 16 + boardgame.io 0.39 + socket.io + Koa (Node), at `/home/bien_nguyen/tien-len` (git `86b2621`) | Background reference only. **Not** the source of truth for rules. Never modify. |
-| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root, no Ecto (O1, O2). Phases 1–4 done (research, Card/Deck, Combination, Rules + InstantWin). See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
+| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root, no Ecto (O1, O2). Phases 1–5 done (research, Card/Deck, Combination, Rules + InstantWin, Game). See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
 
 Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 - Server-authoritative.

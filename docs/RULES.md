@@ -212,6 +212,8 @@ When at least one player qualifies:
 1. **"Lowest valid combination"** (S1). Any single is a valid lead, so the auto-play is **the single lowest card** in the hand. With a mandatory opening card, it is **that card as a single**.
 2. **Last player vs removed players** (S5). The last player still holding cards ranks **above** removed players.
 3. **Host transfer on disconnect** (S6). Host rights move **after the 20 s disconnect timeout**, not on the first disconnect. A host who reconnects in time keeps host rights.
+4. **Opening leader removed** (S5, T3). If the card-led opening leader is removed before the first play, the next active seat leads **without** a mandatory card: that card was discarded with the hand.
+5. **Chopping your own combination** (T10). An out-of-turn four-pair may target any chop target, including the chopper's own combination.
 
 ---
 

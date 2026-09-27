@@ -56,11 +56,12 @@ Tien-Len-Mien-Nam/
 - Tests: one per matrix row, including the rejected cases (three-pair on a pair of 2s; quad or four-pair on a normal three-pair/quad; quad on A♥; triple of 2s unchoppable); same-rank pairs by suit; each instant-win hand plus near misses (5 pairs + 3 singles; a 3→K run; three 2s; four 3's in a winner-led game).
 - Acceptance: every example in RULES §16 that concerns legality passes.
 
-## Phase 5 — Pure game state (T7–T12, T15 effects, T16 actions, T18 flow)
+## Phase 5 — Pure game state (T7–T12, T15 effects, T16 actions, T18 flow) — DONE (2026-09-27)
 
-- [ ] `TienLen.Game`: `new(seats, seed, mode)`; commands `play(seat, cards)`, `pass(seat)`, `chop_out_of_turn(seat, cards)`, `timeout(seat)`, `remove(seat)`; each returns `{:ok, game, events}` or `{:error, reason}`.
-- [ ] Rounds, centre clearing, chop context, finishing, ranking, game end, instant-win end.
-- [ ] `Game.view(game, seat)`: the per-seat projection (T14). No other hands, no seed.
+- [x] `TienLen.Game`: `new(seats, seed, leader: …)` / `start/4`; commands `play(seat, cards)`, `pass(seat)`, `chop_out_of_turn(seat, cards)`, `timeout(seat)`, `remove(seat)`; each returns `{:ok, game, events}` or `{:error, reason}`; `check_*` dry runs.
+- [x] Rounds, centre clearing, chop context, finishing, ranking, game end, instant-win end.
+- [x] `Game.view(game, seat)`: the per-seat projection (T14). No other hands, no seed (the seed is not stored at all).
+- [x] Tests: 143 passing overall, including 600 simulated games (see PORTING_STATUS → Phase 5 results).
 - Tests: the RULES §16 scenarios end to end; property tests (card conservation, exactly one current seat while playing, never a pass on a lead, the game ends with N − 1 finishers or an instant win); timeout actions (X1).
 - Acceptance: no command can act for another seat, except a valid out-of-turn four-pair.
 

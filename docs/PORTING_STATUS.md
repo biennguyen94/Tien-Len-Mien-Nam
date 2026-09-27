@@ -8,14 +8,14 @@ Last updated: 2026-09-27
 | 2 | Card / Deck | **DONE** (2026-09-27) |
 | 3 | Combination engine | **DONE** (2026-09-27) |
 | 4 | Rules engine | **DONE** (2026-09-27) |
-| 5 | Pure game state | NOT STARTED |
+| 5 | Pure game state | **DONE** (2026-09-27) |
 | 6 | GameServer (room process) | NOT STARTED |
 | 7 | Lobby / rooms | NOT STARTED. Needs O3 |
 | 8 | LiveView UI | NOT STARTED. Needs O4 |
 | 9 | Realtime (PubSub, presence) | NOT STARTED |
 | 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
 
-Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4). The web layer is still the generator's default page.
+Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5). The web layer is still the generator's default page.
 
 ## Decisions
 
@@ -100,6 +100,8 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 | X1 | The auto-play when leading is the single lowest card; with a mandatory card, that card as a single. |
 | X2 | The last player holding cards ranks above removed players. |
 | X3 | Host rights transfer after the 20 s disconnect timeout, not on the first disconnect. |
+| X4 | If the leader of a card-led opening is removed before the first play, the lead moves to the next active seat **without** an opening-card requirement (the mandatory card was discarded with their hand). (Phase 5) |
+| X5 | An out-of-turn four-pair is allowed on **any** chop target, including a combination the chopper played themselves; nothing in T10 excludes it. (Phase 5) |
 
 ### Project decisions
 
@@ -239,6 +241,58 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
   - cross-type wins are only bombs over 2s, or over chop-context bombs;
   - a beat never clears chop context.
 - Instant wins: table cases and near misses (five pairs + 3 singles, three 2s, a 3 → K run, four triples), and a cross-check against a brute-force reference on 20,000 dealt hands × 2 modes.
+
+## Phase 5 results (2026-09-27)
+
+### Delivered
+
+- **`TienLen.Game`** (`lib/tien_len/game.ex`), a pure state machine for one game.
+  - `new(seats, seed, leader: seat | nil)` deals from a seed. The **seed is not stored**.
+  - `start(seats, hands, undealt, opts)` takes given hands (tests and replays).
+  - Instant wins are checked at the start (T18). An instant win gives phase `:finished`, ranking `[[winners…], [others…]]`, and the winners' hands revealed in `view/2`.
+  - Commands take the acting seat and return `{:ok, game, events}` or `{:error, reason}`, never raising on bad input:
+    - `play/3`, `pass/2`;
+    - `chop_out_of_turn/3` (resets passes; next is the seat after the chopper);
+    - `timeout/2` (respond → pass; lead → `Rules.auto_lead`);
+    - `remove/2` (discard the hand; a current responder counts as a pass; a current leader moves the lead, X4).
+  - Dry runs: `check_play/3`, `check_pass/2`, `check_chop_out_of_turn/3` (for UI labels later).
+  - Rounds end when no responder is left (active, not passed, not the owner). The owner leads, or the next active seat after the owner (Q2, S5). The centre is cleared (#12).
+  - The game ends when ≤ 1 player is active. Ranking = finishers, then the last player, then removed players (T11, X2).
+  - Queries: `active_seats/1`, `finished?/1`, `instant_win?/1`, `winner/1`.
+  - `view/2` (T14): own hand, all card counts, the public centre and state. The mandatory opening card goes to the leader only. It never includes other hands, undealt or discarded cards.
+- **Events** are public facts only: `:played`, `:chopped`, `:passed`, `:timed_out`, `:finished`, `:removed`, `:round_ended`, `:lead_moved`, `:game_over`.
+- Error reasons added: `:game_over`, `:not_in_game`, `:not_active`, `:not_your_turn`, `:not_your_cards`.
+
+### VERIFIED
+
+- `mix precommit`: **143 passed (2 doctests, 141 tests)**, no warnings.
+- **Scenario tests:**
+  - RULES §16 examples 1, 2, 3, 6, 8, 9, 10;
+  - card-led and winner-led openings;
+  - 2 and 3 players;
+  - passed players skipped;
+  - response and lead timeouts;
+  - finisher's play beaten or passed;
+  - full game to game over with ranking;
+  - removal of a responder, the current leader, the round owner, and down to one player;
+  - instant win with several winners in seat order;
+  - authority checks (other seat, foreign cards, garbage input, unknown seat);
+  - `view/2` contents.
+- **Random simulations: 600 full games** (2–4 players, card- and winner-led). In 2/3 of them the deal is rigged by card swaps: a four-pair, two 2s and a three-pair are placed so chops happen.
+  - A bot mixes plays, passes, out-of-turn chops, timeouts and removals (including of the current seat).
+  - At **every step** the test checks:
+    - 52 distinct cards across hands, played, undealt and discarded;
+    - the current seat is active and has not passed;
+    - `:lead` exactly when the centre is empty;
+    - finished and removed players have empty hands;
+    - no `view/2` shows another player's card, except instant-win reveals.
+  - Every game terminates with a complete ranking.
+  - Event totals today: about 7,200 plays, 6,400 passes, 4,100 round ends, **160 out-of-turn chops**, 430 timeouts, 430 removals, 19 lead moves, 480 game overs. The test enforces minimums so the bot cannot silently stop covering a command.
+
+### Notes
+
+- The first version of the simulation never produced `:chopped` or `:lead_moved` (random deals almost never hold a four-pair when a 2 is on the table, and the bot never removed the current seat). That was fixed by rigging deals, keeping four-pairs intact in the bot, and allowing removal of any active seat. It was a test-coverage gap, not a code bug.
+- X4 and X5 are new interpretations taken while implementing; see Interpretations.
 
 ## Environment state
 
