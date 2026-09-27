@@ -9,9 +9,21 @@ It started as a port of [nguyenank/tien-len](https://github.com/nguyenank/tien-l
 - instant wins (tới trắng);
 - several games per room, with turn and disconnect timeouts.
 
-**Status:** research done, implementation not started. See `docs/PORTING_STATUS.md`.
+**Status:** playable in the browser (lobby + table). Hardening, reconnect and deploy remain; see `docs/PORTING_STATUS.md`.
 
 - Rules: [`docs/RULES.md`](docs/RULES.md)
 - Plan: [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Background on the original: [`docs/RESEARCH.md`](docs/RESEARCH.md)
+
+## Running
+
+```sh
+mix setup          # deps + assets
+mix phx.server     # http://localhost:4010
+mix test
+```
+
+## Credits
+
+Playing-card images by **Adrian Kennard** (https://www.me.uk/cards/), released under CC0 public domain. They were also used by the original project.

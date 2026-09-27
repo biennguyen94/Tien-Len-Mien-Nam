@@ -185,6 +185,18 @@ defmodule TienLen.Room do
     end
   end
 
+  @doc """
+  Dry run of `command/3` (for UI labels): `:ok` or `{:error, reason}`, nothing changes.
+  """
+  @spec check(t(), player_id(), {:play, list()} | :pass | {:chop, list()}) ::
+          :ok | {:error, atom()}
+  def check(room, player_id, cmd) do
+    case command(room, player_id, cmd) do
+      {:ok, _room, _events} -> :ok
+      {:error, _} = error -> error
+    end
+  end
+
   defp run(game, seat, {:play, cards}), do: Game.play(game, seat, cards)
   defp run(game, seat, :pass), do: Game.pass(game, seat)
   defp run(game, seat, {:chop, cards}), do: Game.chop_out_of_turn(game, seat, cards)

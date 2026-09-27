@@ -81,10 +81,12 @@ Tien-Len-Mien-Nam/
 - [x] Tests: 191 passing overall (see PORTING_STATUS → Phase 7 results).
 - Tests: full room, mid-game join refused, a non-host cannot start, token reconnect, forged token rejected.
 
-## Phase 8 — LiveView UI
+## Phase 8 — LiveView UI — DONE (2026-09-27)
 
-- [ ] Lobby LiveView, table LiveView (seats around the table, centre, hand, selection, Play/Pass buttons with server-provided reasons, turn timer, card counts, ranking, instant-win reveal).
-- [ ] Mapping from the original's components: `RESEARCH.md` §18.
+- [x] Lobby LiveView, table LiveView (seats around the table, centre, hand, selection, Play/Pass buttons with server-provided reasons, turn timer, card counts, ranking, instant-win reveal).
+- [x] Mapping from the original's components: `RESEARCH.md` §18. Vietnamese UI, click-to-select, original CC0 card SVGs (O4).
+- [x] Tests: 204 passing overall; smoke test of the real server over HTTP.
+- [ ] Manual check in a real browser (desktop + mobile), NOT VERIFIED yet.
 - Tests: LiveView tests per interaction; no rule logic in JS.
 
 ## Phase 9 — Realtime

@@ -18,7 +18,12 @@ defmodule TienLenWeb.Router do
   scope "/", TienLenWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    post "/ten", PlayerController, :set_name
+
+    live_session :player, on_mount: TienLenWeb.PlayerHook do
+      live "/", LobbyLive
+      live "/phong/:id", TableLive
+    end
   end
 
   # Other scopes may use custom stacks.

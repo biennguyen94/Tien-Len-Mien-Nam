@@ -83,6 +83,9 @@ defmodule TienLen.RoomServer do
   def pass(room_id, player_id), do: call(room_id, {:command, player_id, :pass})
   def chop(room_id, player_id, cards), do: call(room_id, {:command, player_id, {:chop, cards}})
 
+  @doc "Dry run of a command (`{:play, cards}`, `:pass`, `{:chop, cards}`) for UI labels."
+  def check(room_id, player_id, cmd), do: call(room_id, {:check, player_id, cmd})
+
   @doc """
   The room as seen by a seated `player_id`, plus `turn_ms_left` for the current turn.
   Anyone not seated gets `{:error, :not_in_room}` (no spectators, #17).
@@ -165,6 +168,10 @@ defmodule TienLen.RoomServer do
 
   def handle_call({:command, player_id, cmd}, _from, state) do
     reply_change(state, Room.command(state.room, player_id, cmd))
+  end
+
+  def handle_call({:check, player_id, cmd}, _from, state) do
+    {:reply, Room.check(state.room, player_id, cmd), state}
   end
 
   def handle_call({:view, player_id}, _from, state) do

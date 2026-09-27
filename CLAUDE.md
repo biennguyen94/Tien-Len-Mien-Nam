@@ -9,7 +9,7 @@ Read `docs/` before doing any work. Do not re-analyse the original repo from scr
 | | Stack | Status |
 |---|---|---|
 | **Original** | React 16 + boardgame.io 0.39 + socket.io + Koa (Node), at `/home/bien_nguyen/tien-len` (git `86b2621`) | Background reference only. **Not** the source of truth for rules. Never modify. |
-| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root, no Ecto (O1, O2). Phases 1–7 done (research, Card/Deck, Combination, Rules + InstantWin, Game, Room + RoomServer, Lobby + identity). See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
+| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root, no Ecto (O1, O2). Phases 1–8 done (domain, room processes, lobby + identity, LiveView UI at `/` and `/phong/:id`). See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
 
 Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 - Server-authoritative.
@@ -47,7 +47,7 @@ Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 Toolchain (user space, shared with `open-mu-web`): `~/.local/beam` (Erlang/OTP 28, Elixir 1.20.4, Hex, `phx_new` 1.8.15). PATH is set in `~/.bashrc`; in a non-login shell prepend:
 `export PATH="$HOME/.local/beam/otp/bin:$HOME/.local/beam/elixir/bin:$PATH"`.
 
-App: `mix deps.get` · `mix test` · `mix precommit` (compile `--warnings-as-errors`, unlock unused deps, format, test; run it before finishing any change) · `mix phx.server` (port 4000; the assets need `mix assets.setup` first, not used yet).
+App: `mix deps.get` · `mix test` · `mix precommit` (compile `--warnings-as-errors`, unlock unused deps, format, test; run it before finishing any change) · `mix assets.setup` (once, downloads the tailwind/esbuild binaries) then `mix phx.server` (default **port 4010**; 4000 is taken by `openmu-web` on this machine).
 
 Phoenix/LiveView coding guidelines from the generator are in `AGENTS.md`. Where they conflict, the hard rules above win.
 

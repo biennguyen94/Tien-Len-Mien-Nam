@@ -11,11 +11,11 @@ Last updated: 2026-09-27
 | 5 | Pure game state | **DONE** (2026-09-27) |
 | 6 | GameServer (room process) | **DONE** (2026-09-27) |
 | 7 | Lobby / rooms | **DONE** (2026-09-27) |
-| 8 | LiveView UI | NOT STARTED. Needs O4 |
+| 8 | LiveView UI | **DONE** (2026-09-27); real-browser check still NOT VERIFIED, see results |
 | 9 | Realtime (PubSub, presence) | NOT STARTED |
 | 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
 
-Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7). No UI yet beyond the generator's page. The web layer is still the generator's default page.
+Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
 ## Decisions
 
@@ -113,13 +113,13 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 |---|---|
 | O1 | **One Phoenix app at the repo root**, `--app tien_len --module TienLen`. Pure domain in `lib/tien_len/`, web layer in `lib/tien_len_web/`. (Owner accepted the proposal, 2026-09-27.) |
 | O2 | **No database** (`--no-ecto`, also `--no-mailer`): rooms and games live in memory; a restart ends running games. Ecto can be added later for accounts or history. (Accepted with O1; the generator needed it.) |
+| O4 | **Vietnamese UI; click to select cards; the original's card SVGs** (Adrian Kennard, **CC0 public domain**: "You can do what you like with these designs", "No attribution required"; credit kept in README anyway). (Owner, 2026-09-27.) |
 | O3 | **Anonymous identity**: a random player id in the signed Phoenix session, a display name, and a signed seat token (`Phoenix.Token`) for reconnecting without a session. No accounts. (Owner asked to proceed with Phase 7 on the proposal, 2026-09-27.) |
 
 ## Open decisions (project-level, not game rules)
 
 | # | Question | Needed by | Proposal (ASSUMPTION until decided) |
 |---|---|---|---|
-| O4 | UI language / card selection | Phase 8 | Vietnamese UI (maybe English later). Click-to-select cards with a JS hook only for ordering, or reuse the original's drag-and-drop idea. Card SVGs: the original's are by Adrian Kennard, so check their licence before copying. |
 | O5 | Deployment | Phase 10 | Docker on WSL like `open-mu-web` (NOT decided). |
 
 ## Phase 1 results (2026-09-27)
@@ -400,6 +400,69 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 
 - A test exposed a **real crash**: `normalize_name/1` raised `ArgumentError` on invalid UTF-8 input, because `String.trim/1` and the regex ran before the validity check. It is fixed: UTF-8 is checked first. Display names are user input, so this mattered.
 - Rooms are identified by a short random id. There are no room names yet; the lobby shows the host's name.
+
+## Phase 8 results (2026-09-27)
+
+### Delivered
+
+- **Routes** (`:browser` pipeline, `live_session :player` with `TienLenWeb.PlayerHook`):
+  - `/` → `LobbyLive`;
+  - `/phong/:id` → `TableLive`;
+  - `POST /ten` → `PlayerController.set_name` (stores the name in the session; `return_to` accepts local paths only).
+- The generator's page controller was removed; the layout is simplified to a game header plus the theme toggle; `<html lang="vi">`.
+- **`LobbyLive`**:
+  - name form;
+  - live room list (lobby PubSub), with room id, host, x/4, status and a join link;
+  - "Tạo phòng" opens an empty room (`Lobby.open_room/1`) and navigates there, so the creator joins from the table's own process.
+- **`TableLive`**:
+  - joins from its own process (monitored for disconnects), subscribes to the room, re-fetches its own `view/2` on every broadcast;
+  - seats relative to the viewer (me at the bottom, next seat right, top, left);
+  - host crown, connection badge, card count, pass / removed badges, place medals, turn countdown (1 s tick from `turn_ms_left`);
+  - centre pile with combination name, owner and a "chặt" badge in chop context;
+  - own hand as clickable card buttons; the selection lives only in this LiveView;
+  - "Đánh" button whose disabled label is the server's dry-run reason (`RoomServer.check/3`);
+  - "Bỏ lượt" only when passing is legal;
+  - "Chặt ngoài lượt!" only when an out-of-turn four-pair is legal;
+  - host "Bắt đầu ván" / "Ván mới";
+  - results panel with ranking and instant-win reveal;
+  - "Rời phòng".
+  - No spectators: anyone who cannot be seated is sent back to the lobby with a message.
+- **`TienLenWeb.Text`**: Vietnamese messages for every domain error reason, combination names, instant-win names, and place names (Nhất/Nhì/Ba/Bét).
+- **`TienLenWeb.CardComponents`**: card faces from `priv/static/images/cards/` (52 faces + back, copied from the original; CC0).
+- **Domain additions:** `Room.check/3` and `RoomServer.check/3` (dry runs for labels); `Lobby.open_room/1`.
+- The **default HTTP port is 4010** (`config/runtime.exs`), because 4000 is used by the `openmu-web` container on this machine.
+
+### VERIFIED
+
+- `mix precommit`: **204 passed (2 doctests, 202 tests)**, no warnings. The full suite was run 10 more times: 0 failures.
+- **LiveView tests** (real LiveView processes, two players with separate sessions):
+  - each player's HTML contains only their own card ids and images;
+  - the mandatory-card hint is shown only to the leader;
+  - disabled-button labels come from server reasons (`Hãy chọn lá bài`, `Nước đầu phải có lá bắt buộc`);
+  - a play updates both tables through PubSub;
+  - pass visibility (not on a lead);
+  - round end;
+  - game over with ranking, and "Ván mới" only for the host;
+  - instant-win reveal (the winner's hand only);
+  - leaving frees the seat for others;
+  - no name → lobby; unknown room → lobby with a message; a fifth player is refused;
+  - every domain reason has a message.
+- **Lobby LiveView tests:**
+  - the name is stored in the session;
+  - an invalid name gets a message;
+  - `return_to` refuses `https://…`, `//…` and `javascript:` (no open redirect);
+  - creating a room navigates to it;
+  - the list updates live.
+- **Real server over HTTP** (`PORT=4010 mix phx.server`, after `mix assets.setup && mix assets.build`):
+  - `GET /` → 200 with a Vietnamese title;
+  - `POST /ten` with the page's CSRF token → 302, and the name is shown;
+  - `POST /ten` **without** a token → **403**;
+  - card SVGs are served as `image/svg+xml`; CSS → 200.
+- The CSRF token rendered inside the LiveView form is valid: LiveView loads the session's CSRF state on mount (`deps/phoenix_live_view/lib/phoenix_live_view/channel.ex`, `load_csrf_token/2`).
+
+### NOT VERIFIED
+
+- **Visual layout and interaction in a real browser**, including mobile widths, the countdown ticking, and reconnect after a real network drop. No browser was available in this environment. LiveView tests exercise the server side of every interaction, but not CSS or client JS.
 
 ## Environment state
 

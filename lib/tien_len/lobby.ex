@@ -68,6 +68,14 @@ defmodule TienLen.Lobby do
   end
 
   @doc """
+  Opens an empty room without seating anyone; the first player to join becomes host. Used by
+  the web lobby, which then navigates the creator to the room page where they join from their
+  own LiveView process. An empty room closes after the disconnect timeout.
+  """
+  @spec open_room(keyword()) :: {:ok, String.t()} | {:error, term()}
+  def open_room(opts \\ []), do: RoomServer.start_room(opts)
+
+  @doc """
   Seats `player_id` in a room, or reconnects them to their seat. Refused when the room is full
   or a game is running (R6), unless the player is already seated there.
   """

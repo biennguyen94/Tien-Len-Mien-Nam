@@ -42,4 +42,4 @@ Details and code references: `RESEARCH.md` §15–19.
 | P6 | **Auto-play on a lead timeout (X1)** might pick an illegal play, e.g. forgetting the mandatory card. | Build auto-play on `Rules` validation; test it with a mandatory card and in a 2-player game. |
 | P7 | **Instant-win detection edge cases**: a quad counted as two pairs in 6 pairs; four 3's only in card-led games; several winners. | Table-driven tests (Phase 4). |
 | P8 | **In-memory state (O2)**: a deploy or crash ends running games. | Accepted for the first release (ASSUMPTION until O2 is decided). |
-| P9 | **Card artwork licence**: the original's SVGs are by Adrian Kennard. | Check the licence or use another card set (O4). |
+| P9 | **Card artwork licence**: the original's SVGs are by Adrian Kennard. | **Resolved (2026-09-27):** released under CC0 public domain (https://www.me.uk/cards/); credit kept in README. |
