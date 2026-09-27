@@ -37,10 +37,11 @@ Tien-Len-Mien-Nam/
 - Tests: ordering of all 52 cards; the deal has no duplicates and correct sizes for 2/3/4 players; the same seed gives the same deal; lowest holder when 3♠ (or 3♠ and 3♣) is undealt.
 - Acceptance: the card order matches T4 exactly.
 
-## Phase 3 — Combination engine (T5)
+## Phase 3 — Combination engine (T5) — DONE (2026-09-27)
 
-- [ ] `TienLen.Combination.classify/1` → `{:ok, %Combination{type, cards, top, length}}` or `{:error, :invalid}`.
-- [ ] Reject duplicate cards.
+- [x] `TienLen.Combination.classify/1` → `{:ok, %Combination{type, cards, top, length}}` or `{:error, :empty | :duplicate_cards | :invalid_combination}`; `bomb?/1`.
+- [x] Reject duplicate cards.
+- [x] Tests: 66 passing overall, including an exhaustive check of all 1–3-card sets and a cross-check against a reference classifier (see PORTING_STATUS → Phase 3 results).
 - Tests: every type at its min/max length; straights with 2 or wrap-around rejected; `KKAA22` and `QQKKAA22` **rejected** (D5); 5 pairs rejected (Q7); two triples rejected; duplicate ranks in a straight rejected.
 - Acceptance: RULES §4 reproduced.
 

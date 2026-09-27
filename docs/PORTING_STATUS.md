@@ -6,7 +6,7 @@ Last updated: 2026-09-27
 |---|---|---|
 | 1 | Research | **DONE** (2026-09-27) |
 | 2 | Card / Deck | **DONE** (2026-09-27) |
-| 3 | Combination engine | NOT STARTED |
+| 3 | Combination engine | **DONE** (2026-09-27) |
 | 4 | Rules engine | NOT STARTED |
 | 5 | Pure game state | NOT STARTED |
 | 6 | GameServer (room process) | NOT STARTED |
@@ -15,7 +15,7 @@ Last updated: 2026-09-27
 | 9 | Realtime (PubSub, presence) | NOT STARTED |
 | 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
 
-Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2). The web layer is still the generator's default page.
+Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3). The web layer is still the generator's default page.
 
 ## Decisions
 
@@ -176,6 +176,30 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 
 - The deal is round-robin from a Fisher–Yates shuffle. The original used contiguous chunks of a shuffled deck. Both are uniform; this is not a rule difference.
 - `mix phx.server` and the assets (tailwind/esbuild binaries) were not exercised; they are not needed until Phase 8.
+
+## Phase 3 results (2026-09-27)
+
+### Delivered
+
+- **`TienLen.Combination`** (`lib/tien_len/combination.ex`):
+  - `classify/1` → `{:ok, %Combination{type, cards (sorted), top, length}}` or `{:error, :empty | :duplicate_cards | :invalid_combination}`;
+  - `classify!/1`, `types/0`, `bomb?/1` (three-pair, four-of-a-kind, four-pair).
+- Types and constraints exactly as RULES §4:
+  - no 2 in straights or consecutive pairs (D5);
+  - 5 or more pairs invalid (Q7);
+  - straights of 3–12 cards with no wrap-around.
+- Comparison between combinations is left to Phase 4 (`TienLen.Rules`).
+- **Tests** (`test/tien_len/combination_test.exs`):
+  - table cases per type;
+  - the original repo's `validCombination` cases with D5 applied;
+  - an **exhaustive** check of every 1-, 2- and 3-card set (52 + 1,326 + 22,100);
+  - 3,000 random 1–13-card sets and 2,000 generated near-valid runs, cross-checked against an independent reference classifier in the test.
+
+### VERIFIED
+
+- `mix precommit`: **66 passed (2 doctests, 64 tests)**.
+- Cases that changed from the original (RESEARCH §8): `KKAA22`, `QQKKAA22` and `AA22` are **invalid** (the original accepted the first two). `3S 3S` gives `:duplicate_cards` (the original accepted it as a pair).
+- The near-valid generator covers every long type: 483 straights, 133 three-pairs, 122 four-pairs and 918 invalid sets (e.g. 5–6 pairs, runs with a 2) over 2,000 seeds.
 
 ## Environment state
 
