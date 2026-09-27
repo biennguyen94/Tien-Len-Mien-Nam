@@ -45,13 +45,14 @@ Tien-Len-Mien-Nam/
 - Tests: every type at its min/max length; straights with 2 or wrap-around rejected; `KKAA22` and `QQKKAA22` **rejected** (D5); 5 pairs rejected (Q7); two triples rejected; duplicate ranks in a straight rejected.
 - Acceptance: RULES §4 reproduced.
 
-## Phase 4 — Rules engine (T3, T6, T10, T18)
+## Phase 4 — Rules engine (T3, T6, T10, T18) — DONE (2026-09-27)
 
-- [ ] `TienLen.Rules.beats?(new, centre, chop_context?)` implementing the RULES §5.2 matrix, returning the new chop context.
-- [ ] `out_of_turn_allowed?(combo, centre, chop_context?)` (four-pair only).
-- [ ] `validate_opening/…` (mandatory card, T3).
-- [ ] `TienLen.InstantWin.detect(hand, mode)` → `nil` or the hand type (four 3's only when `mode == :card_led`).
-- [ ] Error reasons usable as UI labels (e.g. `:invalid_combination`, `:does_not_match`, `:too_low`, `:must_include_card`, `:cannot_pass_on_lead`).
+- [x] `TienLen.Rules.beats/2` implementing the RULES §5.2 matrix, returning the new chop context; `play/3` (lead with the opening card, or beat).
+- [x] `play_out_of_turn/2` (four-pair only, on a chop target).
+- [x] Opening card check (T3) inside `play/3`; `pass/1`; `auto_lead/2` (X1).
+- [x] `TienLen.InstantWin.detect(hand, mode)` → `nil` or the hand type (four 3's only when `mode == :card_led`); `winners/2`.
+- [x] Error reasons usable as UI labels (see PORTING_STATUS → Phase 4 results).
+- [x] Tests: 115 passing overall.
 - Tests: one per matrix row, including the rejected cases (three-pair on a pair of 2s; quad or four-pair on a normal three-pair/quad; quad on A♥; triple of 2s unchoppable); same-rank pairs by suit; each instant-win hand plus near misses (5 pairs + 3 singles; a 3→K run; three 2s; four 3's in a winner-led game).
 - Acceptance: every example in RULES §16 that concerns legality passes.
 

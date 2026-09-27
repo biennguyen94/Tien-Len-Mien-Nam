@@ -7,7 +7,7 @@ Last updated: 2026-09-27
 | 1 | Research | **DONE** (2026-09-27) |
 | 2 | Card / Deck | **DONE** (2026-09-27) |
 | 3 | Combination engine | **DONE** (2026-09-27) |
-| 4 | Rules engine | NOT STARTED |
+| 4 | Rules engine | **DONE** (2026-09-27) |
 | 5 | Pure game state | NOT STARTED |
 | 6 | GameServer (room process) | NOT STARTED |
 | 7 | Lobby / rooms | NOT STARTED. Needs O3 |
@@ -15,7 +15,7 @@ Last updated: 2026-09-27
 | 9 | Realtime (PubSub, presence) | NOT STARTED |
 | 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
 
-Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3). The web layer is still the generator's default page.
+Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4). The web layer is still the generator's default page.
 
 ## Decisions
 
@@ -200,6 +200,45 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 - `mix precommit`: **66 passed (2 doctests, 64 tests)**.
 - Cases that changed from the original (RESEARCH §8): `KKAA22`, `QQKKAA22` and `AA22` are **invalid** (the original accepted the first two). `3S 3S` gives `:duplicate_cards` (the original accepted it as a pair).
 - The near-valid generator covers every long type: 483 straights, 133 three-pairs, 122 four-pairs and 918 invalid sets (e.g. 5–6 pairs, runs with a 2) over 2,000 seeds.
+
+## Phase 4 results (2026-09-27)
+
+### Delivered
+
+- **`TienLen.Rules`** (`lib/tien_len/rules.ex`), all pure. The centre is `nil` (a lead) or `%{combo, chop_context}`.
+  - `play(cards, centre, opening_card \\ nil)` → `{:ok, combo, chop_context}`: a lead (with the mandatory opening card, T3) or a beat on your turn.
+  - `play_out_of_turn(cards, centre)`: four-pair only, on a chop target (T10, S4).
+  - `pass(centre)`: rejected on a lead (D3).
+  - `beats/2`: the RULES §5.2 matrix, with chop context starting on a 2 and persisting (S3).
+  - `chop_target?/1`.
+  - `auto_lead/2`: the timeout lead play per interpretation X1. It lives here because it is pure; Phase 5/6 calls it.
+- **Error reasons** (for UI labels later):
+  - `:empty`, `:duplicate_cards`, `:invalid_combination` (from Combination);
+  - `:does_not_match`, `:too_low`;
+  - `:cannot_chop` (a bomb where chopping is not allowed: Q4, R2, pair of 2s ← three-pair, triple of 2s);
+  - `:must_include_card`, `:cannot_pass_on_lead`, `:not_four_pair`, `:no_chop_target`.
+- **`TienLen.InstantWin`** (`lib/tien_len/instant_win.ex`):
+  - `detect(hand, mode)` → `:four_twos | :dragon | :six_pairs | :four_threes | nil`;
+  - `matches/2` (all types, in priority order);
+  - `winners(hands, mode)` → `[{seat, type}]` in seat order (the I4 tie-break).
+  - Four 3's only when `mode == :card_led`. A quad counts as two pairs, and so does "five pairs + a triple". The dragon is 3 → A plus any card. No four triples.
+- Card ownership, turn order and seats are **not** checked here; that is Phase 5 (`Game`).
+
+### VERIFIED
+
+- `mix precommit`: **115 passed (2 doctests, 113 tests)**, no warnings.
+- Every row of RULES §5.2, including the rejected cases:
+  - three-pair on a pair of 2s;
+  - quad or four-pair on a normal three-pair or quad (R2);
+  - bombs on ordinary cards (Q4);
+  - triple of 2s unchoppable;
+  - four 2s beaten only by a four-pair in chop context.
+- RULES §16 legality examples 3, 4, 5 and 7, plus the S3 chain 2 → three-pair → higher three-pair → quad → four-pair.
+- Invariants over random combinations (from 400 seeds × 7 sizes, plus every bomb and 2 shape):
+  - same shape: the higher top wins; **equal tops beat neither way** (e.g. two straights ending in 5♥);
+  - cross-type wins are only bombs over 2s, or over chop-context bombs;
+  - a beat never clears chop context.
+- Instant wins: table cases and near misses (five pairs + 3 singles, three 2s, a 3 → K run, four triples), and a cross-check against a brute-force reference on 20,000 dealt hands × 2 modes.
 
 ## Environment state
 
