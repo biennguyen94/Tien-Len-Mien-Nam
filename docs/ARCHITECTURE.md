@@ -49,7 +49,6 @@ TienLen.Application
 ├── Phoenix.PubSub (TienLen.PubSub)
 ├── Registry (TienLen.RoomRegistry, unique: room_id → pid)
 ├── DynamicSupervisor (TienLen.RoomSupervisor) ── RoomServer per room (restart: :temporary)
-├── TienLenWeb.Presence
 └── TienLenWeb.Endpoint
 ```
 
@@ -66,7 +65,7 @@ With no database (O2), a crashed room process is not restarted with stale state:
 | `TienLen.InstantWin` | Detect four 2's / 6 pairs / dragon / four 3's (card-led only) | T18 |
 | `TienLen.Game` | One game: turns, rounds, passes, finishing, ranking, removals, timeout actions, per-seat view | T7–T12, T14–T16 |
 | `TienLen.Room` | Seats, names, host, connection flags, sequence of games, next leader mode | T2, T13, T15 |
-| `TienLen.RoomServer` | Process wrapper: serialisation, timers, PubSub, Presence reactions | T15–T17 |
+| `TienLen.RoomServer` | Process wrapper: serialisation, timers, PubSub, connection tracking by monitoring each player's LiveView | T15–T17 |
 
 ### 2.4 Game state (proposal)
 

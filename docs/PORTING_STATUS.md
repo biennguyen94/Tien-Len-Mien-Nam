@@ -12,7 +12,7 @@ Last updated: 2026-09-27
 | 6 | GameServer (room process) | **DONE** (2026-09-27) |
 | 7 | Lobby / rooms | **DONE** (2026-09-27) |
 | 8 | LiveView UI | **DONE** (2026-09-27); real-browser check still NOT VERIFIED, see results |
-| 9 | Realtime (PubSub, presence) | NOT STARTED |
+| 9 | Realtime (PubSub, presence) | **DONE** (2026-09-27): PubSub + process monitors; no `Phoenix.Presence` (see results) |
 | 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
@@ -463,6 +463,41 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 ### NOT VERIFIED
 
 - **Visual layout and interaction in a real browser**, including mobile widths, the countdown ticking, and reconnect after a real network drop. No browser was available in this environment. LiveView tests exercise the server side of every interaction, but not CSS or client JS.
+
+## Phase 9 results (2026-09-27)
+
+### Delivered
+
+- Most of the realtime design was already in place from Phases 6–8:
+  - PubSub per room, carrying events only;
+  - each `TableLive` re-fetches its **own** projection on every broadcast, so message order does not matter;
+  - connection tracking by `RoomServer` process monitors.
+- Phase 9 adds `test/tien_len_web/live/realtime_test.exs`: multi-session checks on real LiveView processes.
+- **Design decision:** `Phoenix.Presence` is **not** used. The room process already monitors every player's LiveView and ties connections to seats: that is the authoritative source for "connected", disconnect timers and host transfer. Presence would duplicate it. It can still be added later for a site-wide "who is online" count.
+
+### VERIFIED
+
+- `mix precommit`: **213 passed (2 doctests, 211 tests)**; the full suite was run 10 more times: 0 failures.
+- **No hidden card ever reaches another player's page:**
+  - whole games with 2, 3, 4 and 4 players (seeds 11, 22, 33, 44) are driven one command at a time;
+  - after **every** command, every player's rendered HTML is compared with the server's actual hands;
+  - no card of another hand, the undealt cards or discarded cards may appear (as image or card id), except instant-win reveals;
+  - the player's own hand must be shown in full while they play.
+- **Mutation check of that test:** a leak was injected on purpose (`Game.view/2` returning all hands as the player's hand). All 4 whole-game tests failed and named the leaked cards. The change was then reverted (git diff clean) and the suite passed again.
+- **Connections seen by others:**
+  - closing a tab (killing its LiveView) shows "mất kết nối" on the other player's table;
+  - reopening removes the badge and shows the same hand;
+  - two tabs of one player share the seat, and closing one keeps the player connected.
+- **Out-of-turn chop through the UI:**
+  - a player who already passed selects a four-pair while a 2 is on the table and sees "Chặt ngoài lượt!";
+  - chopping updates all three tables (combination name plus the chop-context badge);
+  - play continues from the seat after the chopper;
+  - the current player sees a normal "Đánh" button for the same cards, not the chop button.
+- **Server action on timeout:** with a 40 ms turn timeout, the other player sees the countdown badge and then the auto-played 3♠ in the centre.
+
+### NOT VERIFIED
+
+- A real browser over a real network (websocket reconnect after a network drop, mobile layout). Same as Phase 8.
 
 ## Environment state
 

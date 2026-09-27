@@ -89,10 +89,10 @@ Tien-Len-Mien-Nam/
 - [ ] Manual check in a real browser (desktop + mobile), NOT VERIFIED yet.
 - Tests: LiveView tests per interaction; no rule logic in JS.
 
-## Phase 9 — Realtime
+## Phase 9 — Realtime — DONE (2026-09-27)
 
-- [ ] PubSub per room; each LiveView re-projects `Game.view/2` for its own seat; Presence for connect/disconnect → RoomServer.
-- Tests: multi-session tests; a socket never receives another hand, the seed or the undealt cards.
+- [x] PubSub per room; each LiveView re-projects its own view on every broadcast. Connections: RoomServer process monitors (decided instead of Presence, see PORTING_STATUS).
+- [x] Tests: multi-session tests; a page never shows another hand or the undealt cards, checked after every command of whole 2–4 player games (and mutation-checked).
 
 ## Phase 10 — Tests, security, reconnect, deploy
 
