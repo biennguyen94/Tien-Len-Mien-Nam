@@ -1,5 +1,17 @@
 import Config
 
+# Dev database: the container in deploy/docker-compose.dev.yml (127.0.0.1:5434).
+# Override with DATABASE_URL. Never point this at the OpenMU database.
+config :tien_len, TienLen.Repo,
+  url:
+    System.get_env(
+      "DATABASE_URL",
+      "ecto://tien_len:tien_len_dev_only@127.0.0.1:5434/tien_len_dev"
+    ),
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

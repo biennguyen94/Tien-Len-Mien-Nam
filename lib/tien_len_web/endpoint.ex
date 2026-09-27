@@ -12,8 +12,13 @@ defmodule TienLenWeb.Endpoint do
   ]
 
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options]],
-    longpoll: [connect_info: [session: @session_options]]
+    websocket: [connect_info: [:user_agent, session: @session_options]],
+    longpoll: [connect_info: [:user_agent, session: @session_options]]
+
+  # Tests only: lets LiveViews and requests use the test's database sandbox.
+  if sandbox = Application.compile_env(:tien_len, :sql_sandbox) do
+    plug Phoenix.Ecto.SQL.Sandbox, sandbox: sandbox
+  end
 
   # Serve at "/" the static files from "priv/static" directory.
   #

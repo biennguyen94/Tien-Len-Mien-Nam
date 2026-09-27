@@ -8,6 +8,7 @@
 import Config
 
 config :tien_len,
+  ecto_repos: [TienLen.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configure the endpoint

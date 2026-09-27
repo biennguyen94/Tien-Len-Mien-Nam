@@ -1,5 +1,24 @@
 import Config
 
+# Only in tests, bcrypt runs with the minimum cost so tests stay fast.
+config :bcrypt_elixir, :log_rounds, 1
+
+# Test database (same container as dev, database tien_len_test + partition for parallel runs).
+config :tien_len, TienLen.Repo,
+  url:
+    System.get_env(
+      "TEST_DATABASE_URL",
+      "ecto://tien_len:tien_len_dev_only@127.0.0.1:5434/tien_len_test#{System.get_env("MIX_TEST_PARTITION")}"
+    ),
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: System.schedulers_online() * 2
+
+# Game results are not written by room processes in tests unless a test asks for it
+# (see TienLen.Stats and the :recorder room option).
+config :tien_len, :results_recorder, nil
+
+config :tien_len, :sql_sandbox, Ecto.Adapters.SQL.Sandbox
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :tien_len, TienLenWeb.Endpoint,

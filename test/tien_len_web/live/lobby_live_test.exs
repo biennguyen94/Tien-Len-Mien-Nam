@@ -3,65 +3,112 @@ defmodule TienLenWeb.LobbyLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias TienLen.{Lobby, RoomServer}
+  alias TienLen.{Accounts, Lobby, RoomServer}
 
-  test "a new visitor is asked for a name, and the name is stored in the session", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#name-form")
+  describe "logged out (A2, A3)" do
+    test "the lobby shows the register form (3 fields) and the login form", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/")
 
-    conn = post(conn, ~p"/ten", %{"name" => "  Bình  ", "return_to" => "/"})
-    assert redirected_to(conn) == "/"
-    assert get_session(conn, "player_name") == "Bình"
-
-    {:ok, view, _html} = live(recycle(conn), ~p"/")
-    assert has_element?(view, "#player-name", "Bình")
-    refute has_element?(view, "#name-form")
-  end
-
-  test "an invalid name is refused with a message", %{conn: conn} do
-    conn = post(conn, ~p"/ten", %{"name" => "   "})
-    assert redirected_to(conn) == "/"
-    assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Tên không hợp lệ"
-    assert get_session(conn, "player_name") == nil
-  end
-
-  test "return_to only accepts local paths (no open redirect)", %{conn: conn} do
-    for evil <- ["https://evil.example", "//evil.example", "javascript:alert(1)"] do
-      assert build_conn()
-             |> post(~p"/ten", %{"name" => "A", "return_to" => evil})
-             |> redirected_to() == "/"
+      assert html =~ "Chào bạn! Bạn tên gì?"
+      assert has_element?(view, "#register-form input[name='user[display_name]']")
+      assert has_element?(view, "#register-form input[name='user[username]']")
+      assert has_element?(view, "#register-form input[name='user[password]'][type=password]")
+      assert has_element?(view, "#login-form input[name='user[username]']")
+      assert has_element?(view, "#login-form input[name='user[password]'][type=password]")
+      refute has_element?(view, "#create-room")
+      refute has_element?(view, "#rooms")
     end
 
-    assert conn
-           |> post(~p"/ten", %{"name" => "A", "return_to" => "/phong/abc"})
-           |> redirected_to() ==
-             "/phong/abc"
+    test "registration errors are shown live, in Vietnamese", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/")
+
+      html =
+        view
+        |> form("#register-form",
+          user: %{display_name: " ", username: "A!", password: "short"}
+        )
+        |> render_change()
+
+      assert html =~ "Hãy nhập tên hiển thị"
+      assert html =~ "Tài khoản gồm 3–20 ký tự"
+      assert html =~ "Mật khẩu phải có ít nhất 8 ký tự"
+    end
+
+    test "a taken username (any case) is refused", %{conn: conn} do
+      {:ok, _} =
+        Accounts.register_user(%{display_name: "An", username: "an_nguyen", password: "12345678"})
+
+      {:ok, view, _} = live(conn, ~p"/")
+
+      html =
+        view
+        |> form("#register-form",
+          user: %{display_name: "B", username: "AN_Nguyen", password: "12345678"}
+        )
+        |> render_submit()
+
+      assert html =~ "Tài khoản này đã có người dùng"
+    end
+
+    test "registering logs the new user in and shows the lobby", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/")
+
+      form =
+        form(view, "#register-form",
+          user: %{display_name: "Bình", username: "Binh.Tran", password: "mat-khau-123"}
+        )
+
+      render_submit(form)
+      conn = follow_trigger_action(form, conn)
+
+      assert redirected_to(conn) == "/"
+      user = Accounts.authenticate("binh.tran", "mat-khau-123")
+      assert user.display_name == "Bình"
+      assert get_session(conn, "user_id") == user.id
+
+      {:ok, lobby, _} = live(recycle(conn), ~p"/")
+      assert has_element?(lobby, "#player-name", "Bình")
+      assert has_element?(lobby, "#logout")
+    end
   end
 
-  test "creating a room goes to the table" do
-    conn =
-      Plug.Test.init_test_session(build_conn(), %{"player_id" => "p1", "player_name" => "An"})
+  describe "logged in" do
+    test "creating a room goes to the table" do
+      {:ok, view, _} = live(login_conn("An"), ~p"/")
 
-    {:ok, view, _} = live(conn, ~p"/")
+      {:error, {:live_redirect, %{to: "/phong/" <> id}}} =
+        view |> element("#create-room") |> render_click()
 
-    {:error, {:live_redirect, %{to: "/phong/" <> id}}} =
-      view |> element("#create-room") |> render_click()
+      on_exit(fn -> if pid = RoomServer.whereis(id), do: Process.exit(pid, :kill) end)
+      assert RoomServer.whereis(id)
+    end
 
-    on_exit(fn -> if pid = RoomServer.whereis(id), do: Process.exit(pid, :kill) end)
-    assert RoomServer.whereis(id)
-  end
+    test "the room list updates live" do
+      {:ok, view, _} = live(login_conn("An"), ~p"/")
 
-  test "the room list updates live" do
-    conn =
-      Plug.Test.init_test_session(build_conn(), %{"player_id" => "p1", "player_name" => "An"})
+      {:ok, id, 0} = Lobby.create_room(123_456, "Chi")
+      on_exit(fn -> if pid = RoomServer.whereis(id), do: Process.exit(pid, :kill) end)
 
-    {:ok, view, _} = live(conn, ~p"/")
+      assert has_element?(view, "#room-#{id}", "Chi")
+      assert has_element?(view, "#room-#{id} a", "Vào")
+    end
 
-    {:ok, id, 0} = Lobby.create_room("someone", "Chi")
-    on_exit(fn -> if pid = RoomServer.whereis(id), do: Process.exit(pid, :kill) end)
+    test "the display name can be changed and is saved" do
+      {:ok, view, _} = live(login_conn("An"), ~p"/")
+      view |> element("button", "đổi tên") |> render_click()
+      view |> form("#profile-form", profile: %{display_name: "  An   Nguyễn "}) |> render_submit()
 
-    assert render(view) =~ "room-#{id}"
-    assert has_element?(view, "#room-#{id}", "Chi")
-    assert has_element?(view, "#room-#{id} a", "Vào")
+      assert has_element?(view, "#player-name", "An Nguyễn")
+      assert Accounts.get_user(test_user("An").id).display_name == "An Nguyễn"
+    end
+
+    test "an invalid new display name is refused" do
+      {:ok, view, _} = live(login_conn("An"), ~p"/")
+      view |> element("button", "đổi tên") |> render_click()
+      html = view |> form("#profile-form", profile: %{display_name: "   "}) |> render_submit()
+
+      assert html =~ "Tên không hợp lệ"
+      assert Accounts.get_user(test_user("An").id).display_name == "An"
+    end
   end
 end

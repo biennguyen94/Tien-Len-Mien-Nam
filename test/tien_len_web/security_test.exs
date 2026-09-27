@@ -9,14 +9,8 @@ defmodule TienLenWeb.SecurityTest do
   import Phoenix.LiveViewTest
 
   alias TienLen.{Card, Lobby, RoomServer}
-  alias TienLenWeb.PlayerIdentity
 
-  defp player_conn(name, id \\ nil) do
-    Plug.Test.init_test_session(build_conn(), %{
-      "player_id" => id || "id-" <> name,
-      "player_name" => name
-    })
-  end
+  defp player_conn(name), do: login_conn(name)
 
   defp open_room!(opts) do
     {:ok, id} = Lobby.open_room(opts)
@@ -32,7 +26,7 @@ defmodule TienLenWeb.SecurityTest do
       id = open_room!([])
       {:ok, _, _} = live(player_conn("An"), ~p"/phong/#{id}")
       {:ok, _, _} = live(player_conn("Binh"), ~p"/phong/#{id}")
-      :ok = Lobby.start_game(id, "id-An")
+      :ok = Lobby.start_game(id, test_user("An").id)
 
       state = :sys.get_state(RoomServer.whereis(id))
       assert state.deals == []
@@ -41,15 +35,22 @@ defmodule TienLenWeb.SecurityTest do
   end
 
   describe "R3/R4 — a client cannot choose who it is or act for someone else" do
-    test "LiveView identity comes only from the signed session, not from params" do
+    test "LiveView identity comes only from the signed session (user id), not from params" do
       id = open_room!(deals: [deal(%{0 => "3S 9H", 1 => "4S 9C"})])
-      {:ok, an, _} = live(player_conn("An"), ~p"/phong/#{id}?player_id=id-Binh")
-      {:ok, _binh, _} = live(player_conn("Binh"), ~p"/phong/#{id}")
-      an |> element("#start") |> render_click()
+      {:ok, _binh_first, _} = live(player_conn("Binh"), ~p"/phong/#{id}")
+      binh_id = test_user("Binh").id
 
-      # An's page shows An's cards (seat 0), whatever the URL says
-      assert has_element?(an, "#card-3S")
-      refute has_element?(an, "#card-4S")
+      {:ok, an, _} =
+        live(player_conn("An"), ~p"/phong/#{id}?player_id=#{binh_id}&user_id=#{binh_id}")
+
+      binh = RoomServer.whereis(id)
+      # Bình joined first (seat 0, host); An is seat 1 whatever the URL says
+      assert :sys.get_state(binh).room.seats[1].player_id == test_user("An").id
+      :ok = Lobby.start_game(id, binh_id)
+
+      # An's page shows seat 1's cards (4S 9C), not Bình's
+      assert has_element?(an, "#card-4S")
+      refute has_element?(an, "#card-3S")
     end
 
     test "events cannot pick another player's cards or seat" do
@@ -108,7 +109,8 @@ defmodule TienLenWeb.SecurityTest do
   describe "XSS" do
     test "a display name with HTML is escaped everywhere it is shown" do
       evil = "<script>x()</script>"
-      {:ok, id, 0} = Lobby.create_room("host", evil)
+      conn = login_conn(evil)
+      {:ok, id, 0} = Lobby.create_room(test_user(evil).id, evil)
       on_exit(fn -> if pid = RoomServer.whereis(id), do: Process.exit(pid, :kill) end)
 
       {:ok, lobby, _} = live(player_conn("An"), ~p"/")
@@ -116,63 +118,8 @@ defmodule TienLenWeb.SecurityTest do
       refute html =~ evil
       assert html =~ "&lt;script&gt;"
 
-      {:ok, table, _} = live(player_conn(evil, "host"), ~p"/phong/#{id}")
+      {:ok, table, _} = live(conn, ~p"/phong/#{id}")
       refute render(table) =~ evil
-    end
-  end
-
-  describe "resume links (reconnect on another device)" do
-    test "a valid link adopts the identity and returns to the seat" do
-      id = open_room!(deals: [deal(%{0 => "3S 9H", 1 => "4S 9C"})])
-      {:ok, an, _} = live(player_conn("An"), ~p"/phong/#{id}")
-      {:ok, binh, _} = live(player_conn("Binh"), ~p"/phong/#{id}")
-      an |> element("#start") |> render_click()
-
-      link =
-        binh
-        |> element("#resume-link")
-        |> render()
-        |> then(&Regex.run(~r{/tiep-tuc/[^"]+}, &1))
-        |> hd()
-
-      # a brand-new device (empty session) opens the link
-      conn = get(build_conn(), link)
-      assert redirected_to(conn) == "/phong/#{id}"
-      assert get_session(conn, "player_id") == "id-Binh"
-      assert get_session(conn, "player_name") == "Binh"
-
-      {:ok, binh2, _} = live(recycle(conn), ~p"/phong/#{id}")
-      assert has_element?(binh2, "#card-4S")
-    end
-
-    test "tampered, foreign, garbage and expired links are refused" do
-      token = PlayerIdentity.sign_resume("p", "n", "room")
-
-      assert {:ok, %{player_id: "p", name: "n", room_id: "room"}} =
-               PlayerIdentity.verify_resume(token)
-
-      assert PlayerIdentity.verify_resume(token, max_age: -1) == {:error, :expired}
-      assert PlayerIdentity.verify_resume(token <> "x") == {:error, :invalid}
-      # a seat token (other salt) is not a resume link
-      assert PlayerIdentity.verify_resume(PlayerIdentity.sign("p")) == {:error, :invalid}
-
-      conn = get(build_conn(), "/tiep-tuc/garbage")
-      assert redirected_to(conn) == "/"
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Link không hợp lệ"
-      refute get_session(conn, "player_name")
-    end
-
-    test "each player only sees their own resume link" do
-      id = open_room!([])
-      {:ok, an, _} = live(player_conn("An"), ~p"/phong/#{id}")
-      {:ok, binh, _} = live(player_conn("Binh"), ~p"/phong/#{id}")
-
-      [an_link] = Regex.run(~r{/tiep-tuc/([^"]+)}, render(an), capture: :all_but_first)
-      [binh_link] = Regex.run(~r{/tiep-tuc/([^"]+)}, render(binh), capture: :all_but_first)
-
-      assert {:ok, %{player_id: "id-An"}} = PlayerIdentity.verify_resume(an_link)
-      assert {:ok, %{player_id: "id-Binh"}} = PlayerIdentity.verify_resume(binh_link)
-      refute render(an) =~ binh_link
     end
   end
 end

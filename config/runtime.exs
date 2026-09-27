@@ -53,6 +53,17 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  database_url =
+    System.get_env("DATABASE_URL") ||
+      raise """
+      environment variable DATABASE_URL is missing.
+      For example: ecto://USER:PASS@HOST/DATABASE
+      """
+
+  config :tien_len, TienLen.Repo,
+    url: database_url,
+    pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
+
   host = System.get_env("PHX_HOST") || "localhost"
   # Public URL (used for absolute links such as resume links). Defaults fit a local Docker
   # deploy reached at http://localhost:4020; behind HTTPS set PHX_URL_SCHEME=https and

@@ -34,6 +34,7 @@ defmodule TienLenWeb.Layouts do
   slot :inner_block, required: true
 
   attr :wide, :boolean, default: false, doc: "use the full width (game table)"
+  attr :current_user, :any, default: nil, doc: "the logged-in user, if any"
 
   def app(assigns) do
     ~H"""
@@ -43,7 +44,20 @@ defmodule TienLenWeb.Layouts do
           ♠ Tiến Lên Miền Nam
         </.link>
       </div>
-      <div class="flex-none">
+      <div class="flex-none flex items-center gap-2">
+        <span :if={@current_user} id="current-user" class="text-sm">
+          {@current_user.display_name}
+          <span class="text-base-content/60">(@{@current_user.username})</span>
+        </span>
+        <.link
+          :if={@current_user}
+          id="logout"
+          href={~p"/dang-xuat"}
+          method="delete"
+          class="btn btn-ghost btn-sm"
+        >
+          Đăng xuất
+        </.link>
         <.theme_toggle />
       </div>
     </header>

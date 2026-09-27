@@ -14,6 +14,10 @@ Last updated: 2026-09-27
 | 8 | LiveView UI | **DONE** (2026-09-27); real-browser check still NOT VERIFIED, see results |
 | 9 | Realtime (PubSub, presence) | **DONE** (2026-09-27): PubSub + process monitors; no `Phoenix.Presence` (see results) |
 | 10 | Tests / security / reconnect / deploy | **DONE** (2026-09-27): deployed on Docker (WSL), port 4020 |
+| 11 | Database foundation (Ecto + PostgreSQL) | **DONE** (2026-09-27) |
+| 12 | Accounts: register / login / logout | **DONE** (2026-09-28) |
+| 13 | Game results, leaderboard, history | NOT STARTED |
+| 14 | Deploy with database | NOT STARTED |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -106,6 +110,27 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 | X7 | Host transfer (S6) goes to the next seat in seat order **that is connected**, if any; otherwise to the next seated player. (Phase 6) |
 | X8 | **Leaving** the room (as opposed to disconnecting) during a game removes the player from the game at once (like a disconnect timeout), frees the seat, and passes host rights at once. (Phase 6) |
 | X9 | A room closes when its last player leaves, or when a disconnect timeout expires and nobody in the room is connected. (Phase 6) |
+
+### Batch 6 — accounts and leaderboard (owner, 2026-09-27)
+
+| # | Decision | Supersedes |
+|---|---|---|
+| A1 | **Leaderboard = number of 1st places ("về nhất").** Also shown: games played and win rate. | – |
+| A2 | **Separate "Đăng ký" and "Đăng nhập".** Register form: "Chào bạn! Bạn tên gì?" (display name), "Tài khoản" (username), "Mật khẩu" (password). Login form: username + password. Logout supported. | – |
+| A3 | **Login is required** to use the lobby and rooms; anonymous play is removed. | O3 (anonymous identity) |
+| A4 | **PostgreSQL in its own container** (never the OpenMU database). | O2 (no database) |
+
+Interpretations taken to implement A1–A4 (confirm or override):
+
+| # | Interpretation |
+|---|---|
+| Y1 | Username: 3–20 characters, `a–z 0–9 _ .`, case-insensitive and unique (stored lowercase). Password: 8–72 characters (the bcrypt limit), hashed with bcrypt. The display name follows the existing name rules (1–20 characters). |
+| Y2 | **Resume links are removed**: with accounts, continuing on another device means logging in there. A resume link would be a password-less login token. |
+| Y3 | Logout ends the session and disconnects the user's open LiveViews. In a room this counts as a disconnect (20 s, then removal, T15). |
+| Y4 | The same account on two devices or tabs uses the same seat (like two tabs today). The room player id is the user id. |
+| Y5 | Leaderboard details: every finished game is recorded for all its players, including instant-win games (each instant winner gets a win) and removed players (the game counts as played). Order: wins desc, win rate desc, games played asc, username. |
+| Y6 | The room process records results at game over. A database failure is logged and never interrupts play. |
+| Y7 | No login rate limiting in the first version (residual risk: password guessing; see RISKS). |
 
 ### Project decisions
 
@@ -556,11 +581,100 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 - **In-memory state**: a redeploy or crash ends running games (O2).
 - No per-IP rate limiting beyond the room cap. Name length and LiveView frame limits bound payload sizes.
 
+## Phase 11 results (2026-09-27)
+
+### Delivered
+
+- **Dependencies:** `ecto_sql`, `postgrex`, `phoenix_ecto`, `bcrypt_elixir` (for Phase 12).
+- **`TienLen.Repo`**, started in `TienLen.Application` before PubSub.
+- **Configuration:**
+  - dev and test default to `ecto://tien_len:…@127.0.0.1:5434/tien_len_dev` / `tien_len_test` (override with `DATABASE_URL` / `TEST_DATABASE_URL`);
+  - prod requires `DATABASE_URL` (plus optional `POOL_SIZE`).
+- **Aliases:** `ecto.setup`, `ecto.reset`; `setup` now includes `ecto.setup`; `test` creates and migrates first.
+- **Dev/test PostgreSQL:** `deploy/docker-compose.dev.yml`, container `tien-len-dev-db` (postgres:latest = 18.6), bound to **127.0.0.1:5434** only, with its own volume. Separate from the OpenMU database (5433) and from production.
+- **Test sandbox:**
+  - `test_helper.exs` sets manual mode;
+  - `TienLen.DataCase`;
+  - `ConnCase` checks out a sandbox for every test and provides `sandbox_conn/0` (sandbox metadata in the user agent);
+  - `Phoenix.Ecto.SQL.Sandbox` plug in the endpoint (test only, via `:sql_sandbox`);
+  - the `/live` socket passes `:user_agent`;
+  - `TienLenWeb.PlayerHook` lets LiveView processes join the test's sandbox;
+  - bcrypt uses 1 log round in tests.
+- `config :tien_len, :results_recorder, nil` in test: rooms do not write results unless a test asks (Phase 13).
+
+### VERIFIED
+
+- `mix ecto.create` works for dev and test.
+- `mix precommit`: **228 passed** (the 227 previous tests are unchanged, plus a repo test checking that tests run on `tien_len_test`, never `openmu`).
+
+## Phase 12 results (2026-09-28)
+
+### Delivered
+
+- **Migration** `create_users`: `username` (lowercase, unique index), `display_name`, `hashed_password`, timestamps.
+- **`TienLen.Accounts`** and **`TienLen.Accounts.User`**:
+  - `register_user/1` (Y1 rules, Vietnamese error messages, bcrypt hash; password and hash are redacted from `inspect`);
+  - `authenticate/2`: username case ignored; the same timing for unknown users (`Bcrypt.no_user_verify/0`);
+  - `get_user/1`, `change_display_name/2`, `change_registration/2`.
+- **`TienLenWeb.UserAuth`:**
+  - `fetch_current_user` plug (replaces the anonymous `PlayerIdentity` plug);
+  - `log_in_user/2`: renews and clears the session (no fixation), stores `user_id` and a random per-browser `live_socket_id`;
+  - `log_out_user/1`: broadcasts `disconnect` to this browser's LiveViews, clears the session;
+  - `on_mount` hooks: `:mount_current_user` (lobby) and `:require_user` (rooms; assigns `player_id` = user id and `player_name` = display name);
+  - the test sandbox hook moved here.
+- **`TienLenWeb.UserSessionController`:**
+  - `POST /dang-nhap`: one message for a wrong password or an unknown user; the username is kept in the form;
+  - `DELETE /dang-xuat`.
+- **Router:** `live_session :public` (`/`, lobby) and `live_session :authenticated` (`/phong/:id`). `POST /ten` and `GET /tiep-tuc/:token` are removed.
+- **`LobbyLive` when logged out:**
+  - a register form with the three fields "Chào bạn! Bạn tên gì?", "Tài khoản", "Mật khẩu", validated live; on success it submits the same credentials to `/dang-nhap` (`phx-trigger-action`), so the user is logged in at once;
+  - a login form.
+- **`LobbyLive` when logged in:** the lobby plus "đổi tên", which saves the display name in the database.
+- **Header:** the display name, `@username` and an "Đăng xuất" link (`DELETE`, CSRF-protected).
+- **Removed** (A3, Y2): `TienLenWeb.PlayerIdentity` (anonymous ids, seat tokens, resume links), `PlayerHook`, `PlayerController`, the table's resume link.
+
+### VERIFIED
+
+- `mix precommit`: **240 passed (2 doctests, 238 tests)**, no warnings. The full suite was run 10 more times: 0 failures.
+- **Accounts tests:**
+  - lowercase storage;
+  - bcrypt hash only (not the password, not visible in `inspect`);
+  - unique username in any case;
+  - format and length rules;
+  - password 8 characters to 72 bytes (a 75-byte Vietnamese password is refused);
+  - all fields required;
+  - authentication with any username case; wrong password, unknown user and junk input all rejected.
+- **Web tests:**
+  - the lobby shows the 3-field register form and the 2-field login form when logged out;
+  - live Vietnamese errors;
+  - a taken username (any case) is refused;
+  - registering logs the user in (`follow_trigger_action`) and shows the lobby;
+  - the session is renewed at login (a value planted before login does not survive);
+  - one message for a wrong password or an unknown user;
+  - malformed login params do not crash;
+  - logout clears the session and broadcasts `disconnect` to this browser's LiveViews; a `GET /dang-xuat` is 404 and leaves the user logged in;
+  - a session for a deleted user counts as logged out;
+  - rooms require login;
+  - two devices of one account share one seat, whose player id is the user id;
+  - changing the display name saves it;
+  - all earlier game, room, realtime and security tests now run with real accounts.
+- **Real dev server over HTTP** (`mix phx.server`, dev database):
+  - logged out, `/` shows "Chào bạn! Bạn tên gì?" and `/phong/…` redirects to `/`;
+  - a wrong password → "Sai tài khoản hoặc mật khẩu", with the username kept;
+  - login with `BINH_SMOKE` (upper case) → "Chào Bình!", name and logout link shown;
+  - logout with the link's CSRF token → "Đã đăng xuất", login form shown, rooms redirect again.
+  - A dev-database user `binh_smoke` was created for this check.
+
+### NOT VERIFIED
+
+- The registration form in a real browser (the `phx-trigger-action` submit is covered by LiveView tests, not by a browser).
+
 ## Environment state
 
 - Original repo: `/home/bien_nguyen/tien-len` (unmodified source). It contains one untracked file, `docs/research.md`, added during research. That file is **stale**: it is superseded by this repo's `docs/`. The owner decided to keep it.
 - Scratch copy with `node_modules` and the probe tests: the session scratchpad (temporary, not needed).
 - Toolchain: `~/.local/beam` (OTP 28, Elixir 1.20.4, `phx_new` 1.8.15), shared with `open-mu-web`.
 - Git: local repo on branch `main`, no remote (the `gh` CLI is not installed). One commit per phase.
-- Docker: container `tien-len` (image `tien-len:latest`) running on host port 4020, `restart: unless-stopped`; stop with `cd deploy && docker compose down`.
+- Docker: container `tien-len` (image `tien-len:latest`) running on host port 4020, `restart: unless-stopped`; stop with `cd deploy && docker compose down`. It is the pre-database version until Phase 14.
+- Dev/test database: container `tien-len-dev-db` on 127.0.0.1:5434 (`docker compose -f deploy/docker-compose.dev.yml up -d`), databases `tien_len_dev` and `tien_len_test`.
 - Owner decision: keep the stale `docs/research.md` in the original repo (do not delete it).

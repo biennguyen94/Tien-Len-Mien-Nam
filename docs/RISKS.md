@@ -43,3 +43,6 @@ Details and code references: `RESEARCH.md` §15–19.
 | P7 | **Instant-win detection edge cases**: a quad counted as two pairs in 6 pairs; four 3's only in card-led games; several winners. | Table-driven tests (Phase 4). |
 | P8 | **In-memory state (O2)**: a deploy or crash ends running games. | Accepted for the first release (ASSUMPTION until O2 is decided). |
 | P9 | **Card artwork licence**: the original's SVGs are by Adrian Kennard. | **Resolved (2026-09-27):** released under CC0 public domain (https://www.me.uk/cards/); credit kept in README. |
+| P10 | **Password guessing**: no login rate limiting yet (Y7). | Accepted for the first version. Candidate fix: throttle failed logins per username and IP. |
+| P11 | **Stateless sessions**: logout clears the cookie on that browser, but a copied cookie stays valid (no server-side session list). | Accepted (as in open-mu-web R12). A users-sessions table would allow "log out everywhere". |
+

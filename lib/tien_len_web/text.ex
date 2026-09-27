@@ -32,7 +32,6 @@ defmodule TienLenWeb.Text do
     no_game: "Chưa có ván nào",
     unknown_command: "Lệnh không hợp lệ",
     too_many_rooms: "Máy chủ đang quá nhiều phòng, hãy thử lại sau",
-    invalid_link: "Link không hợp lệ hoặc đã hết hạn",
     unknown_request: "Yêu cầu không hợp lệ"
   }
 

@@ -101,3 +101,29 @@ Tien-Len-Mien-Nam/
 - [x] Review against `RISKS.md` section A: none of R1–R9 reproducible (table in PORTING_STATUS → Phase 10 results).
 - [x] Deployment (O5): Docker on WSL, port 4020, `docs/DEPLOY.md`.
 - [ ] Manual check in a real browser (NOT VERIFIED yet).
+
+## Phase 11 — Database foundation (A4) — DONE (2026-09-27)
+
+- [x] Add `ecto_sql`, `postgrex`, `phoenix_ecto`; `TienLen.Repo`; config for dev / test / prod (`DATABASE_URL`).
+- [x] Dev/test PostgreSQL container on `127.0.0.1:5434` (`deploy/docker-compose.dev.yml`); never the OpenMU database.
+- [x] Test sandbox for plain tests, controllers and LiveViews; `DataCase`.
+- Acceptance: the existing suite passes with the database in place; `mix ecto.setup` works.
+
+## Phase 12 — Accounts (A2, A3, Y1–Y4, Y7) — DONE (2026-09-28)
+
+- [x] `users` table; `TienLen.Accounts` (register, authenticate, change display name); bcrypt.
+- [x] Register (3 fields) and login (2 fields) forms, logout; the session stores the user id (renewed on login); LiveViews require a user; resume links removed (Y2).
+- [x] Tests: 240 passing; HTTP check of login/logout on the dev server.
+- Tests: validation, unique username (case-insensitive), wrong password, session fixation (renewed session), logout disconnects LiveViews, pages require login, the room player id is the user id.
+
+## Phase 13 — Results, leaderboard, history (A1, Y5, Y6)
+
+- [ ] `games` and `game_players` tables; the room records every finished game.
+- [ ] `/bang-xep-hang` leaderboard; personal history of recent games.
+- Tests: normal game, instant win (several winners), removed players, ordering, a DB failure does not stop play.
+
+## Phase 14 — Deploy with database
+
+- [ ] Compose service `db` (PostgreSQL, volume); migrations with `bin/migrate`; `DATABASE_URL` in `.env`; backup notes in `DEPLOY.md`.
+- Acceptance: the container stack runs, registration/login/leaderboard work over HTTP, data survives a restart.
+

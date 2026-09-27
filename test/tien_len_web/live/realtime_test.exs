@@ -17,12 +17,7 @@ defmodule TienLenWeb.RealtimeTest do
 
   @names ~w(An Binh Chi Dung)
 
-  defp player_conn(name) do
-    Plug.Test.init_test_session(build_conn(), %{
-      "player_id" => "id-" <> name,
-      "player_name" => name
-    })
-  end
+  defp player_conn(name), do: login_conn(name)
 
   defp open_room!(opts) do
     {:ok, id} = Lobby.open_room(opts)

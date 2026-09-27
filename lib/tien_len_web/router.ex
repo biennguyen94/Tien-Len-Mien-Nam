@@ -1,6 +1,8 @@
 defmodule TienLenWeb.Router do
   use TienLenWeb, :router
 
+  import TienLenWeb.UserAuth, only: [fetch_current_user: 2]
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -8,7 +10,7 @@ defmodule TienLenWeb.Router do
     plug :put_root_layout, html: {TienLenWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug TienLenWeb.PlayerIdentity
+    plug :fetch_current_user
   end
 
   pipeline :api do
@@ -18,11 +20,16 @@ defmodule TienLenWeb.Router do
   scope "/", TienLenWeb do
     pipe_through :browser
 
-    post "/ten", PlayerController, :set_name
-    get "/tiep-tuc/:token", PlayerController, :resume
+    post "/dang-nhap", UserSessionController, :create
+    delete "/dang-xuat", UserSessionController, :delete
 
-    live_session :player, on_mount: TienLenWeb.PlayerHook do
+    # lobby: logged in or not (shows the register / login forms when not)
+    live_session :public, on_mount: {TienLenWeb.UserAuth, :mount_current_user} do
       live "/", LobbyLive
+    end
+
+    # rooms: login required (A3)
+    live_session :authenticated, on_mount: {TienLenWeb.UserAuth, :require_user} do
       live "/phong/:id", TableLive
     end
   end

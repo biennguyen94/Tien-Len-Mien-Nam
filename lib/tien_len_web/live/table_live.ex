@@ -33,12 +33,6 @@ defmodule TienLenWeb.TableLive do
       |> assign(:now, now())
 
     cond do
-      socket.assigns.player_name == nil ->
-        {:ok,
-         socket
-         |> put_flash(:error, "Hãy nhập tên trước khi vào phòng")
-         |> push_navigate(to: ~p"/")}
-
       not connected?(socket) ->
         {:ok, socket}
 
@@ -49,14 +43,7 @@ defmodule TienLenWeb.TableLive do
           {:ok, _seat} ->
             :timer.send_interval(1_000, :tick)
 
-            token =
-              TienLenWeb.PlayerIdentity.sign_resume(
-                socket.assigns.player_id,
-                socket.assigns.player_name,
-                id
-              )
-
-            {:ok, socket |> assign(:resume_token, token) |> load()}
+            {:ok, load(socket)}
 
           {:error, reason} ->
             {:ok, socket |> put_flash(:error, Text.reason(reason)) |> push_navigate(to: ~p"/")}
@@ -196,7 +183,7 @@ defmodule TienLenWeb.TableLive do
   @impl true
   def render(%{view: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_user={@current_user}>
       <p id="joining" class="text-center text-base-content/70">Đang vào phòng…</p>
     </Layouts.app>
     """
@@ -206,30 +193,13 @@ defmodule TienLenWeb.TableLive do
     assigns = assign(assigns, :secs, seconds_left(assigns))
 
     ~H"""
-    <Layouts.app flash={@flash} wide>
+    <Layouts.app flash={@flash} current_user={@current_user} wide>
       <div class="flex flex-wrap items-center justify-between gap-2">
         <p>
           Phòng <span id="room-code" class="font-mono font-semibold">{@room_id}</span>
           <span class="text-base-content/60">· ván đã chơi: {@view.games_played}</span>
         </p>
         <div class="flex items-center gap-1">
-          <details id="resume" class="dropdown dropdown-end">
-            <summary class="btn btn-ghost btn-sm">Chơi tiếp trên máy khác</summary>
-            <div class="dropdown-content z-10 w-80 rounded-box bg-base-200 p-3 text-sm shadow space-y-2">
-              <p>
-                Mở link này trên máy khác để tiếp tục với chỗ ngồi của bạn (hết hạn sau 24 giờ).
-                Đừng gửi cho người khác.
-              </p>
-              <input
-                id="resume-link"
-                type="text"
-                readonly
-                value={url(~p"/tiep-tuc/#{@resume_token}")}
-                class="input input-bordered input-sm w-full"
-                onfocus="this.select()"
-              />
-            </div>
-          </details>
           <button
             id="leave"
             phx-click="leave"

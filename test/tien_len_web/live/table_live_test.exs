@@ -9,10 +9,7 @@ defmodule TienLenWeb.TableLiveTest do
   defp cards(codes), do: Card.parse_many!(codes)
 
   # A browser session with a player id and a name.
-  defp player_conn(name) do
-    build_conn()
-    |> Plug.Test.init_test_session(%{"player_id" => "id-" <> name, "player_name" => name})
-  end
+  defp player_conn(name), do: login_conn(name)
 
   defp open_room!(opts) do
     {:ok, id} = Lobby.open_room(opts)
@@ -40,10 +37,9 @@ defmodule TienLenWeb.TableLiveTest do
       assert has_element?(view, "#start[disabled]")
     end
 
-    test "without a name the player is sent to the lobby" do
+    test "without logging in the player is sent to the lobby (A3)" do
       id = open_room!([])
-      conn = Plug.Test.init_test_session(build_conn(), %{"player_id" => "x"})
-      assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/phong/#{id}")
+      assert {:error, {:redirect, %{to: "/"}}} = live(sandbox_conn(), ~p"/phong/#{id}")
     end
 
     test "unknown room: back to the lobby with a message" do
@@ -165,7 +161,6 @@ defmodule TienLenWeb.TableLiveTest do
         :not_in_room,
         :invalid_name,
         :too_many_rooms,
-        :invalid_link,
         :unknown_request,
         :no_game,
         :unknown_command

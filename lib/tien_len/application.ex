@@ -10,6 +10,7 @@ defmodule TienLen.Application do
     children = [
       TienLenWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:tien_len, :dns_cluster_query) || :ignore},
+      TienLen.Repo,
       {Phoenix.PubSub, name: TienLen.PubSub},
       # One TienLen.RoomServer per room, looked up by room id.
       {Registry, keys: :unique, name: TienLen.RoomRegistry},
