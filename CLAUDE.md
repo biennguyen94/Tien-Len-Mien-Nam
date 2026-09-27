@@ -9,7 +9,7 @@ Read `docs/` before doing any work. Do not re-analyse the original repo from scr
 | | Stack | Status |
 |---|---|---|
 | **Original** | React 16 + boardgame.io 0.39 + socket.io + Koa (Node), at `/home/bien_nguyen/tien-len` (git `86b2621`) | Background reference only. **Not** the source of truth for rules. Never modify. |
-| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root, no Ecto (O1, O2). Phases 1–9 done (domain, room processes, lobby + identity, LiveView UI at `/` and `/phong/:id`, realtime checks). Phase 10 (hardening/deploy) needs O5. See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
+| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root, no Ecto (O1, O2). All 10 phases done; **deployed** as Docker container `tien-len` on port 4020 (`docs/DEPLOY.md`). Remaining: a manual check in a real browser. See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
 
 Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 - Server-authoritative.
@@ -40,6 +40,7 @@ Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 - `docs/PORTING_PLAN.md` — phases with checklists and acceptance criteria
 - `docs/PORTING_STATUS.md` — current status, **decision log**, interpretations, open questions (update as work progresses)
 - `docs/RISKS.md` — original security issues and bugs (not to be ported), porting risks
+- `docs/DEPLOY.md` — Docker deployment on WSL (port 4020), environment variables, operations
 - `docs/RESEARCH.md` — full reverse-engineering report of the original (background; its §21/§23–25 are historical)
 
 ## Commands

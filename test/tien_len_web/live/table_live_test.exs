@@ -164,6 +164,9 @@ defmodule TienLenWeb.TableLiveTest do
         :room_not_found,
         :not_in_room,
         :invalid_name,
+        :too_many_rooms,
+        :invalid_link,
+        :unknown_request,
         :no_game,
         :unknown_command
       ]

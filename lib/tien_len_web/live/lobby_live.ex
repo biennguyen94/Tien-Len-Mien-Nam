@@ -30,12 +30,16 @@ defmodule TienLenWeb.LobbyLive do
   def handle_event("edit_name", _params, socket),
     do: {:noreply, assign(socket, :editing_name, true)}
 
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+
   @impl true
   def handle_info({:lobby_updated, _id}, socket),
     do: {:noreply, assign(socket, :rooms, Lobby.list_rooms())}
 
   def handle_info({:room_closed, _id}, socket),
     do: {:noreply, assign(socket, :rooms, Lobby.list_rooms())}
+
+  def handle_info(_unexpected, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do

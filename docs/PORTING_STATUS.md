@@ -13,7 +13,7 @@ Last updated: 2026-09-27
 | 7 | Lobby / rooms | **DONE** (2026-09-27) |
 | 8 | LiveView UI | **DONE** (2026-09-27); real-browser check still NOT VERIFIED, see results |
 | 9 | Realtime (PubSub, presence) | **DONE** (2026-09-27): PubSub + process monitors; no `Phoenix.Presence` (see results) |
-| 10 | Tests / security / reconnect / deploy | NOT STARTED. Needs O5 |
+| 10 | Tests / security / reconnect / deploy | **DONE** (2026-09-27): deployed on Docker (WSL), port 4020 |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -113,6 +113,7 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 |---|---|
 | O1 | **One Phoenix app at the repo root**, `--app tien_len --module TienLen`. Pure domain in `lib/tien_len/`, web layer in `lib/tien_len_web/`. (Owner accepted the proposal, 2026-09-27.) |
 | O2 | **No database** (`--no-ecto`, also `--no-mailer`): rooms and games live in memory; a restart ends running games. Ecto can be added later for accounts or history. (Accepted with O1; the generator needed it.) |
+| O5 | **Docker on WSL**, like open-mu-web: release image `tien-len:latest`, compose project `tien-len`, host port 4020 (`docs/DEPLOY.md`). (Owner asked to proceed with Phase 10 on the proposal, 2026-09-27.) |
 | O4 | **Vietnamese UI; click to select cards; the original's card SVGs** (Adrian Kennard, **CC0 public domain**: "You can do what you like with these designs", "No attribution required"; credit kept in README anyway). (Owner, 2026-09-27.) |
 | O3 | **Anonymous identity**: a random player id in the signed Phoenix session, a display name, and a signed seat token (`Phoenix.Token`) for reconnecting without a session. No accounts. (Owner asked to proceed with Phase 7 on the proposal, 2026-09-27.) |
 
@@ -120,7 +121,6 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 
 | # | Question | Needed by | Proposal (ASSUMPTION until decided) |
 |---|---|---|---|
-| O5 | Deployment | Phase 10 | Docker on WSL like `open-mu-web` (NOT decided). |
 
 ## Phase 1 results (2026-09-27)
 
@@ -499,10 +499,68 @@ An earlier version of I1/I4/I5/I6 (the instant winner leads the next game; ties 
 
 - A real browser over a real network (websocket reconnect after a network drop, mobile layout). Same as Phase 8.
 
+## Phase 10 results (2026-09-27)
+
+### Delivered
+
+- **Hardening:**
+  - catch-all `handle_call` / `handle_info` in `RoomServer` (unknown requests → `{:error, :unknown_request}`, stray messages ignored);
+  - catch-all `handle_event` / `handle_info` in `TableLive` and `LobbyLive`;
+  - **room cap**: `RoomServer.start_room/1` refuses when `max_rooms` rooms are open (`MAX_ROOMS`, default 500) → "Máy chủ đang quá nhiều phòng".
+- **Resume links (reconnect on another device, T15):**
+  - `PlayerIdentity.sign_resume/3` / `verify_resume/2`: a signed token with player id, name and room, valid 24 h;
+  - `GET /tiep-tuc/:token` renews the session with that identity and redirects to the room;
+  - `TableLive` shows the link only to its own player ("Chơi tiếp trên máy khác", with a warning not to share it).
+  - Page reloads on the same device already reconnect through the session (Phases 7–9).
+- **Deploy (O5):**
+  - `mix phx.gen.release --docker` (`Dockerfile`, `.dockerignore`, `rel/`);
+  - `deploy/docker-compose.yml`, `deploy/.env.example`, `deploy/.env` (gitignored, `chmod 600`, excluded from the build context);
+  - prod config: `PHX_URL_SCHEME` / `PHX_URL_PORT` / `check_origin: :conn` / optional `PHX_FORCE_SSL` / `MAX_ROOMS`;
+  - deployed as container `tien-len` on host port **4020**; see `docs/DEPLOY.md`.
+- **Tests added:**
+  - `test/tien_len/fuzz_test.exs`;
+  - `test/tien_len/room_cap_test.exs` (not async: it changes global config);
+  - `test/tien_len_web/security_test.exs`.
+
+### Security review (RISKS.md section A)
+
+| Risk | Status in the port | Evidence |
+|---|---|---|
+| R1 seed leak | Not reproducible: the seed is never stored (`Game`), `RoomServer.deals` is empty after the deal, and views/broadcasts carry no seed | `security_test` R1, `game_test` "does not keep the seed", `room_server_test` broadcast scan |
+| R2 action-log leak | Not reproducible: no shared move log, selection is LiveView-local, broadcasts carry played cards only | `room_server_test` "whole game by timeouts" scan, `realtime_test` whole-game HTML checks (mutation-checked) |
+| R3 unauthenticated sync | Not reproducible: identity only from the signed session (URL params ignored), a forged cookie loses the id, no spectators | `security_test` R3/R4, `player_identity_test`, `table_live_test` no spectators |
+| R4 acting for another player | Not reproducible: every command carries the session's seat | `security_test` R3/R4, `game_test` authority, `room_test` |
+| R5 no server validation | Not reproducible: all rules validated in `Rules` / `Game` | `rules_test`, `game_test`, `combination_test` |
+| R6 crash on bad input | Not reproducible: bad input returns errors; catch-alls in processes | `fuzz_test` (200 games × 400 random commands; garbage calls and messages), `security_test` R6/R7 |
+| R7 `undefined` in staging | Not reproducible: selection is limited to cards in the player's own hand | `security_test` R6/R7 (foreign and junk card codes) |
+| R8 unvalidated player count | Not reproducible: 2–4 seats enforced | `room_test`, `lobby_test` |
+| R9 rooms created on demand | Not reproducible: rooms only via the lobby; visiting an unknown id does not create it | `security_test` R9 |
+| Extra: XSS through names | Escaped by HEEx | `security_test` XSS |
+| Extra: open redirect | `return_to` local paths only | `lobby_live_test` |
+| Extra: CSRF | Enforced (403 without a token), verified on the dev server and the container | `DEPLOY.md` verification |
+| Extra: cross-site websocket | Refused (403 for a foreign `Origin`) | `DEPLOY.md` verification |
+
+### VERIFIED
+
+- `mix precommit`: **227 passed (2 doctests, 225 tests)**, no warnings. The full suite was run 10 more times: 0 failures.
+- The Docker image builds. The container runs. The smoke tests in `DEPLOY.md` pass (HTTP, CSRF, SVG, websocket origin check, resume-link base URL). The image contains no `.env`.
+
+### NOT VERIFIED
+
+- A full game played in a real browser (dev server or container), including mobile layout and real network drops. This is the main remaining manual check.
+- HTTPS behind a reverse proxy.
+
+### Residual risks (accepted or open)
+
+- **Resume links grant the identity** to whoever holds them, for 24 hours. The UI warns the player not to share them.
+- **In-memory state**: a redeploy or crash ends running games (O2).
+- No per-IP rate limiting beyond the room cap. Name length and LiveView frame limits bound payload sizes.
+
 ## Environment state
 
 - Original repo: `/home/bien_nguyen/tien-len` (unmodified source). It contains one untracked file, `docs/research.md`, added during research. That file is **stale**: it is superseded by this repo's `docs/`. The owner decided to keep it.
 - Scratch copy with `node_modules` and the probe tests: the session scratchpad (temporary, not needed).
 - Toolchain: `~/.local/beam` (OTP 28, Elixir 1.20.4, `phx_new` 1.8.15), shared with `open-mu-web`.
-- Git: local repo on branch `main`, no remote (the `gh` CLI is not installed). No commits yet.
+- Git: local repo on branch `main`, no remote (the `gh` CLI is not installed). One commit per phase.
+- Docker: container `tien-len` (image `tien-len:latest`) running on host port 4020, `restart: unless-stopped`; stop with `cd deploy && docker compose down`.
 - Owner decision: keep the stale `docs/research.md` in the original repo (do not delete it).

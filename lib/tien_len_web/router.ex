@@ -19,6 +19,7 @@ defmodule TienLenWeb.Router do
     pipe_through :browser
 
     post "/ten", PlayerController, :set_name
+    get "/tiep-tuc/:token", PlayerController, :resume
 
     live_session :player, on_mount: TienLenWeb.PlayerHook do
       live "/", LobbyLive

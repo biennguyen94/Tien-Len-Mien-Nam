@@ -48,7 +48,15 @@ defmodule TienLenWeb.TableLive do
         case Lobby.join_room(id, socket.assigns.player_id, socket.assigns.player_name) do
           {:ok, _seat} ->
             :timer.send_interval(1_000, :tick)
-            {:ok, load(socket)}
+
+            token =
+              TienLenWeb.PlayerIdentity.sign_resume(
+                socket.assigns.player_id,
+                socket.assigns.player_name,
+                id
+              )
+
+            {:ok, socket |> assign(:resume_token, token) |> load()}
 
           {:error, reason} ->
             {:ok, socket |> put_flash(:error, Text.reason(reason)) |> push_navigate(to: ~p"/")}
@@ -90,6 +98,9 @@ defmodule TienLenWeb.TableLive do
     {:noreply, push_navigate(socket, to: ~p"/")}
   end
 
+  # Unknown or malformed events (e.g. from a tampered client) are ignored.
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+
   defp act(socket, fun) do
     case fun.(socket.assigns.room_id, socket.assigns.player_id) do
       :ok -> {:noreply, socket |> assign(:selected, MapSet.new()) |> load()}
@@ -102,6 +113,7 @@ defmodule TienLenWeb.TableLive do
   @impl true
   def handle_info({:room_updated, _id, _version, _events}, socket), do: {:noreply, load(socket)}
   def handle_info(:tick, socket), do: {:noreply, assign(socket, :now, now())}
+  def handle_info(_unexpected, socket), do: {:noreply, socket}
 
   defp load(socket) do
     case RoomServer.view(socket.assigns.room_id, socket.assigns.player_id) do
@@ -200,9 +212,33 @@ defmodule TienLenWeb.TableLive do
           Phòng <span id="room-code" class="font-mono font-semibold">{@room_id}</span>
           <span class="text-base-content/60">· ván đã chơi: {@view.games_played}</span>
         </p>
-        <button id="leave" phx-click="leave" class="btn btn-ghost btn-sm" data-confirm="Rời phòng?">
-          Rời phòng
-        </button>
+        <div class="flex items-center gap-1">
+          <details id="resume" class="dropdown dropdown-end">
+            <summary class="btn btn-ghost btn-sm">Chơi tiếp trên máy khác</summary>
+            <div class="dropdown-content z-10 w-80 rounded-box bg-base-200 p-3 text-sm shadow space-y-2">
+              <p>
+                Mở link này trên máy khác để tiếp tục với chỗ ngồi của bạn (hết hạn sau 24 giờ).
+                Đừng gửi cho người khác.
+              </p>
+              <input
+                id="resume-link"
+                type="text"
+                readonly
+                value={url(~p"/tiep-tuc/#{@resume_token}")}
+                class="input input-bordered input-sm w-full"
+                onfocus="this.select()"
+              />
+            </div>
+          </details>
+          <button
+            id="leave"
+            phx-click="leave"
+            class="btn btn-ghost btn-sm"
+            data-confirm="Rời phòng?"
+          >
+            Rời phòng
+          </button>
+        </div>
       </div>
 
       <div id="table" class="grid grid-cols-3 grid-rows-[auto_1fr_auto] gap-3 items-center">

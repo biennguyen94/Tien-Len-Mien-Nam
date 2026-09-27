@@ -53,12 +53,20 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  host = System.get_env("PHX_HOST") || "localhost"
+  # Public URL (used for absolute links such as resume links). Defaults fit a local Docker
+  # deploy reached at http://localhost:4020; behind HTTPS set PHX_URL_SCHEME=https and
+  # PHX_URL_PORT=443 (see docs/DEPLOY.md).
+  url_scheme = System.get_env("PHX_URL_SCHEME", "http")
+  url_port = String.to_integer(System.get_env("PHX_URL_PORT", "4020"))
 
   config :tien_len, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :tien_len, TienLenWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: host, port: url_port, scheme: url_scheme],
+    # LiveView websockets accept the origin the page was served from (host/IP/port may vary
+    # between WSL, LAN and a VPS).
+    check_origin: :conn,
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
@@ -67,6 +75,13 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
     secret_key_base: secret_key_base
+
+  if System.get_env("PHX_FORCE_SSL") in ~w(true 1) do
+    config :tien_len, TienLenWeb.Endpoint,
+      force_ssl: [rewrite_on: [:x_forwarded_proto], exclude: [hosts: ["localhost", "127.0.0.1"]]]
+  end
+
+  config :tien_len, :max_rooms, String.to_integer(System.get_env("MAX_ROOMS", "500"))
 
   # ## SSL Support
   #

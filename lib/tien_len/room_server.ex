@@ -37,9 +37,22 @@ defmodule TienLen.RoomServer do
 
   # -- API ----------------------------------------------------------------------
 
-  @doc "Starts a room under `TienLen.RoomSupervisor`. Returns `{:ok, room_id}`."
+  @doc """
+  Starts a room under `TienLen.RoomSupervisor`. Returns `{:ok, room_id}`, or
+  `{:error, :too_many_rooms}` when `max_rooms/0` rooms are already open (a cheap guard against
+  room-creation spam; every room is a process).
+  """
   @spec start_room(keyword()) :: {:ok, String.t()} | {:error, term()}
   def start_room(opts \\ []) do
+    if DynamicSupervisor.count_children(TienLen.RoomSupervisor).active >= max_rooms(),
+      do: {:error, :too_many_rooms},
+      else: do_start_room(opts)
+  end
+
+  @doc "Maximum number of open rooms (`config :tien_len, :max_rooms`, default 500)."
+  def max_rooms, do: Application.get_env(:tien_len, :max_rooms, 500)
+
+  defp do_start_room(opts) do
     id = Keyword.get_lazy(opts, :id, &new_id/0)
 
     case DynamicSupervisor.start_child(
@@ -199,6 +212,9 @@ defmodule TienLen.RoomServer do
     {:reply, summary, state}
   end
 
+  # Unknown requests are answered with an error instead of crashing the room.
+  def handle_call(_unexpected, _from, state), do: {:reply, {:error, :unknown_request}, state}
+
   @impl true
   def handle_info(:idle_check, state) do
     if map_size(state.room.seats) == 0, do: {:stop, :normal, state}, else: {:noreply, state}
@@ -252,6 +268,9 @@ defmodule TienLen.RoomServer do
   end
 
   def handle_info({:turn_timeout, _stale}, state), do: {:noreply, state}
+
+  # Anything else (stray or malformed messages) is ignored instead of crashing the room.
+  def handle_info(_unexpected, state), do: {:noreply, state}
 
   # -- helpers ------------------------------------------------------------------
 

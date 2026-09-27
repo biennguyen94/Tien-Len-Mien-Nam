@@ -5,7 +5,7 @@ Details and code references: `RESEARCH.md` §15–19.
 
 ## A. Security issues in the original (must not be ported)
 
-| ID | Severity | Issue | Status | Port handling |
+| ID | Severity | Issue | Status | Port handling (all verified in Phase 10, see PORTING_STATUS) |
 |---|---|---|---|---|
 | R1 | Critical | **PRNG seed sent to every client** (`state.plugins.random.data`). Replaying `setUp` with it reconstructs all hands. | VERIFIED | The seed stays in the room process; `Game.view/2` never includes it (T1, T14) |
 | R2 | High | **Action log broadcast unredacted.** `relocateCards` args include `draggableId = rank+suit`, so opponents see which cards a player moves. | VERIFIED | No shared move log. Card selection stays in the player's own LiveView and is never broadcast. |

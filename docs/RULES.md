@@ -184,6 +184,7 @@ When at least one player qualifies:
   - if they were due to lead, the next remaining player leads;
   - if only one player then holds cards, the game ends.
 - A removed player plays normally in the **next** game if still in the room.
+- To continue on another device, a player can open their personal **resume link** (valid 24 h). It carries their identity, so it must not be shared.
 
 ## 13. Visibility — T14
 

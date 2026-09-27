@@ -30,7 +30,10 @@ defmodule TienLenWeb.Text do
     not_in_room: "Bạn không ở trong phòng này",
     invalid_name: "Tên không hợp lệ (1–20 ký tự)",
     no_game: "Chưa có ván nào",
-    unknown_command: "Lệnh không hợp lệ"
+    unknown_command: "Lệnh không hợp lệ",
+    too_many_rooms: "Máy chủ đang quá nhiều phòng, hãy thử lại sau",
+    invalid_link: "Link không hợp lệ hoặc đã hết hạn",
+    unknown_request: "Yêu cầu không hợp lệ"
   }
 
   @types %{

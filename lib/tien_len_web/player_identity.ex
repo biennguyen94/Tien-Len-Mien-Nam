@@ -35,6 +35,43 @@ defmodule TienLenWeb.PlayerIdentity do
     )
   end
 
+  # -- resume links ---------------------------------------------------------------
+
+  @resume_salt "tien_len resume link"
+  @resume_max_age 24 * 3600
+
+  @doc """
+  A **resume link** token: lets the player continue on another device (T15). It carries the
+  player id, display name and room id, and expires after 24 hours. Whoever has the link acts
+  as that player, so it is shown only to the player themselves.
+  """
+  @spec sign_resume(String.t(), String.t(), String.t()) :: String.t()
+  def sign_resume(player_id, name, room_id),
+    do:
+      Phoenix.Token.sign(TienLenWeb.Endpoint, @resume_salt, %{
+        "p" => player_id,
+        "n" => name,
+        "r" => room_id
+      })
+
+  @doc "Verifies a resume token: `{:ok, %{player_id, name, room_id}}` or `{:error, reason}`."
+  @spec verify_resume(term(), keyword()) :: {:ok, map()} | {:error, atom()}
+  def verify_resume(token, opts \\ []) do
+    max_age = Keyword.get(opts, :max_age, @resume_max_age)
+
+    case Phoenix.Token.verify(TienLenWeb.Endpoint, @resume_salt, token, max_age: max_age) do
+      {:ok, %{"p" => p, "n" => n, "r" => r}}
+      when is_binary(p) and is_binary(n) and is_binary(r) ->
+        {:ok, %{player_id: p, name: n, room_id: r}}
+
+      {:ok, _other} ->
+        {:error, :invalid}
+
+      error ->
+        error
+    end
+  end
+
   # -- Plug ---------------------------------------------------------------------
 
   @impl Plug

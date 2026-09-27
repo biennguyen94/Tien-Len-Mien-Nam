@@ -9,7 +9,7 @@ It started as a port of [nguyenank/tien-len](https://github.com/nguyenank/tien-l
 - instant wins (tới trắng);
 - several games per room, with turn and disconnect timeouts.
 
-**Status:** playable in the browser (lobby + table). Hardening, reconnect and deploy remain; see `docs/PORTING_STATUS.md`.
+**Status:** complete and deployed (Docker, http://localhost:4020). See `docs/PORTING_STATUS.md` and `docs/DEPLOY.md`.
 
 - Rules: [`docs/RULES.md`](docs/RULES.md)
 - Plan: [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md)

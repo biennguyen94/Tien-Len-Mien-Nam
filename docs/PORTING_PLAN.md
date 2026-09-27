@@ -94,7 +94,10 @@ Tien-Len-Mien-Nam/
 - [x] PubSub per room; each LiveView re-projects its own view on every broadcast. Connections: RoomServer process monitors (decided instead of Presence, see PORTING_STATUS).
 - [x] Tests: multi-session tests; a page never shows another hand or the undealt cards, checked after every command of whole 2–4 player games (and mutation-checked).
 
-## Phase 10 — Tests, security, reconnect, deploy
+## Phase 10 — Tests, security, reconnect, deploy — DONE (2026-09-27)
 
-- [ ] Reconnect by token across page reloads; fuzz random commands against `Game`; a review against `RISKS.md` section A (none of R1–R9 reproducible).
-- [ ] Deployment (O5).
+- [x] Reconnect: page reloads via the session; another device via a signed resume link (`/tiep-tuc/:token`, 24 h).
+- [x] Fuzz random commands against `Game`, `Room` and `RoomServer`; catch-alls in processes and LiveViews; room cap.
+- [x] Review against `RISKS.md` section A: none of R1–R9 reproducible (table in PORTING_STATUS → Phase 10 results).
+- [x] Deployment (O5): Docker on WSL, port 4020, `docs/DEPLOY.md`.
+- [ ] Manual check in a real browser (NOT VERIFIED yet).

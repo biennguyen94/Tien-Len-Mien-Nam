@@ -1,0 +1,22 @@
+# Tiến Lên Miền Nam — release container on the WSL Docker host (decision O5).
+#
+#   cd deploy && cp .env.example .env    # then set SECRET_KEY_BASE (mix phx.gen.secret)
+#   docker compose up -d --build
+#
+# No database. Games live in memory: a restart or redeploy ends running games (O2).
+# Host port 4020 by default (4000 is openmu-web, 4010 is the dev server).
+name: tien-len
+
+services:
+  tien-len:
+    build:
+      context: ..
+    image: tien-len:latest
+    container_name: tien-len
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PHX_SERVER: "true"
+      PORT: "4000"
+    ports:
+      - "${WEB_PORT:-4020}:4000"
