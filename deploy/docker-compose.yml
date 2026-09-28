@@ -1,13 +1,32 @@
-# Tiến Lên Miền Nam — release container on the WSL Docker host (decision O5).
+# Tiến Lên Miền Nam — release container + its own PostgreSQL on the WSL Docker host (O5, A4).
 #
-#   cd deploy && cp .env.example .env    # then set SECRET_KEY_BASE (mix phx.gen.secret)
+#   cd deploy && cp .env.example .env    # then set SECRET_KEY_BASE and POSTGRES_PASSWORD
 #   docker compose up -d --build
 #
-# No database. Games live in memory: a restart or redeploy ends running games (O2).
-# Host port 4020 by default (4000 is openmu-web, 4010 is the dev server).
+# The app runs its migrations at every start (bin/migrate, decision Z1); the database is its
+# own (never the OpenMU one). Accounts and game results live in the `tien-len-db` volume.
+# Rooms and running games are in memory: a restart ends running games (not the results).
+# Host port 4020 by default (4000 is openmu-web, 4010 is the dev server). The database is not
+# published on the host.
 name: tien-len
 
 services:
+  db:
+    image: postgres:18
+    container_name: tien-len-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tien_len
+      POSTGRES_DB: tien_len
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - tien-len-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tien_len -d tien_len"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   tien-len:
     build:
       context: ..
@@ -18,5 +37,13 @@ services:
     environment:
       PHX_SERVER: "true"
       PORT: "4000"
+      DATABASE_URL: ecto://tien_len:${POSTGRES_PASSWORD}@db/tien_len
+    command: ["sh", "-c", "bin/migrate && exec bin/server"]
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "${WEB_PORT:-4020}:4000"
+
+volumes:
+  tien-len-db:

@@ -17,7 +17,7 @@ Last updated: 2026-09-27
 | 11 | Database foundation (Ecto + PostgreSQL) | **DONE** (2026-09-27) |
 | 12 | Accounts: register / login / logout | **DONE** (2026-09-28) |
 | 13 | Game results, leaderboard, history | **DONE** (2026-09-28) |
-| 14 | Deploy with database | NOT STARTED |
+| 14 | Deploy with database | **DONE** (2026-09-28): `tien-len` + `tien-len-db` on port 4020 |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -132,6 +132,7 @@ Interpretations taken to implement A1–A4 (confirm or override):
 | Y6 | The room process records results at game over. A database failure is logged and never interrupts play. |
 | Y7 | No login rate limiting in the first version (residual risk: password guessing; see RISKS). |
 | Y8 | The leaderboard and history pages also require login (consistent with A3). (Phase 13) |
+| Z1 | The deployed app runs its migrations at **every start** (`bin/migrate && bin/server`). Safe because the database belongs to Tiến Lên alone; open-mu-web does not do this because its database is OpenMU's. PostgreSQL is pinned to major version 18 (`postgres:18`), because a major upgrade needs a data migration. (Phase 14) |
 
 ### Project decisions
 
@@ -723,12 +724,37 @@ Interpretations taken to implement A1–A4 (confirm or override):
   - over HTTP, `/bang-xep-hang` redirects when logged out; logged in, it lists "An 2 2 100%" and "Chi 0 2 0%", and `/lich-su` shows "28/09/2026 07:00 · 2 người" with the places.
   - Dev-database users `smoke_an` and `smoke_chi` and their games were created for this check.
 
+## Phase 14 results (2026-09-28)
+
+### Delivered
+
+- `mix phx.gen.release` (with Ecto): `TienLen.Release`, `rel/overlays/bin/migrate` (+ `.bat`).
+- **`deploy/docker-compose.yml`:**
+  - service `db`: `postgres:18`, volume `tien-len-db`, healthcheck, no host port;
+  - service `tien-len`: `DATABASE_URL` built from `POSTGRES_PASSWORD`, `depends_on` a healthy DB, command `bin/migrate && exec bin/server` (Z1).
+- `deploy/.env.example` documents `POSTGRES_PASSWORD` and `POOL_SIZE`. `deploy/.env` got a random 48-hex `POSTGRES_PASSWORD` (still gitignored, `chmod 600`).
+- `docs/DEPLOY.md` rewritten: topology, variables, operations (including the `down -v` warning), backup/restore, smoke test, verification.
+
+### VERIFIED (on the running containers)
+
+- The build and start sequence works (DB healthy → migrations → server). Later starts log "Migrations already up". The DB port is not published.
+- Accounts registered and a game played through the release with the real recorder. Over HTTP: the register form, login, leaderboard ("An @prod_an 1 1 100%") and history.
+- **Data survives `docker compose restart` and `down` + `up -d`.** The old session cookie stays valid.
+- The backup command works (332-line dump).
+- CSRF 403, websocket origin 101/403, login-required redirects, no `.env` in the image.
+- `mix precommit`: **258 passed**.
+- The test accounts `prod_an` / `prod_chi` and their game were deleted afterwards. The production database is empty.
+
+### NOT VERIFIED
+
+- Registration and a full game in a real browser against the container.
+
 ## Environment state
 
 - Original repo: `/home/bien_nguyen/tien-len` (unmodified source). It contains one untracked file, `docs/research.md`, added during research. That file is **stale**: it is superseded by this repo's `docs/`. The owner decided to keep it.
 - Scratch copy with `node_modules` and the probe tests: the session scratchpad (temporary, not needed).
 - Toolchain: `~/.local/beam` (OTP 28, Elixir 1.20.4, `phx_new` 1.8.15), shared with `open-mu-web`.
 - Git: local repo on branch `main`, no remote (the `gh` CLI is not installed). One commit per phase.
-- Docker: container `tien-len` (image `tien-len:latest`) running on host port 4020, `restart: unless-stopped`; stop with `cd deploy && docker compose down`. It is the pre-database version until Phase 14.
+- Docker: compose project `tien-len` running: `tien-len` (image `tien-len:latest`, host port 4020) and `tien-len-db` (postgres:18, volume `tien-len_tien-len-db`, empty after the Phase 14 checks), both `restart: unless-stopped`. Stop with `cd deploy && docker compose down` (never `-v` unless the data should be deleted).
 - Dev/test database: container `tien-len-dev-db` on 127.0.0.1:5434 (`docker compose -f deploy/docker-compose.dev.yml up -d`), databases `tien_len_dev` and `tien_len_test`.
 - Owner decision: keep the stale `docs/research.md` in the original repo (do not delete it).

@@ -9,7 +9,7 @@ Read `docs/` before doing any work. Do not re-analyse the original repo from scr
 | | Stack | Status |
 |---|---|---|
 | **Original** | React 16 + boardgame.io 0.39 + socket.io + Koa (Node), at `/home/bien_nguyen/tien-len` (git `86b2621`) | Background reference only. **Not** the source of truth for rules. Never modify. |
-| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub, PostgreSQL (Ecto) for accounts and results | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root (O1). A database was added in Phase 11 (A4 supersedes O2). Phases 1–13 done: the game (1–10, deployed on port 4020 as the pre-database version), PostgreSQL (11), accounts (12), results + leaderboard `/bang-xep-hang` + history `/lich-su` (13). Next: 14 deploy with the database. See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
+| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub, PostgreSQL (Ecto) for accounts and results | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root (O1). A database was added in Phase 11 (A4 supersedes O2). All 14 phases done: the game (1–10), PostgreSQL (11), accounts (12), results + leaderboard `/bang-xep-hang` + history `/lich-su` (13), **deployed with its database** as compose project `tien-len` on port 4020 (14, `docs/DEPLOY.md`). Remaining: a manual check in a real browser. See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
 
 Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 - Server-authoritative.

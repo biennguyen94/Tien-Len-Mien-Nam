@@ -123,8 +123,10 @@ Tien-Len-Mien-Nam/
 - [x] Tests: 258 passing; ordering mutation-checked; dev-database check over HTTP.
 - Tests: normal game, instant win (several winners), removed players, ordering, a DB failure does not stop play.
 
-## Phase 14 — Deploy with database
+## Phase 14 — Deploy with database — DONE (2026-09-28)
 
-- [ ] Compose service `db` (PostgreSQL, volume); migrations with `bin/migrate`; `DATABASE_URL` in `.env`; backup notes in `DEPLOY.md`.
+- [x] Compose service `db` (PostgreSQL 18, volume, healthcheck); migrations with `bin/migrate` at every start (Z1); `DATABASE_URL` from `POSTGRES_PASSWORD` in `.env`; backup/restore notes in `DEPLOY.md`.
+- [x] Verified on the containers: migrations, login, leaderboard, history over HTTP; data survives restart and down/up.
+- [ ] Manual check in a real browser (NOT VERIFIED yet).
 - Acceptance: the container stack runs, registration/login/leaderboard work over HTTP, data survives a restart.
 

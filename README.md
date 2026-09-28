@@ -9,7 +9,7 @@ It started as a port of [nguyenank/tien-len](https://github.com/nguyenank/tien-l
 - instant wins (tới trắng);
 - several games per room, with turn and disconnect timeouts.
 
-**Status:** complete and deployed (Docker, http://localhost:4020). See `docs/PORTING_STATUS.md` and `docs/DEPLOY.md`.
+**Status:** complete and deployed with PostgreSQL (Docker, http://localhost:4020): accounts (register / login / logout), leaderboard by 1st places, game history. See `docs/PORTING_STATUS.md` and `docs/DEPLOY.md`.
 
 - Rules: [`docs/RULES.md`](docs/RULES.md)
 - Plan: [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md)
@@ -19,7 +19,8 @@ It started as a port of [nguyenank/tien-len](https://github.com/nguyenank/tien-l
 ## Running
 
 ```sh
-mix setup          # deps + assets
+docker compose -f deploy/docker-compose.dev.yml up -d   # dev/test PostgreSQL on 127.0.0.1:5434
+mix setup          # deps + database + assets
 mix phx.server     # http://localhost:4010
 mix test
 ```
