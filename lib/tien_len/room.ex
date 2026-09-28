@@ -33,7 +33,10 @@ defmodule TienLen.Room do
             status: :waiting,
             game: nil,
             games_played: 0,
-            last_winner: nil
+            last_winner: nil,
+            # seat => player id of everyone dealt into the current / last game (kept even if they
+            # leave the room mid-game, so results are recorded for the right account)
+            game_players: %{}
 
   @type player_id :: term()
   @type seat :: 0..3
@@ -157,7 +160,8 @@ defmodule TienLen.Room do
           seed -> Game.new(participants, seed, opts)
         end
 
-      room = %{room | status: :playing, game: game}
+      game_players = Map.new(participants, &{&1, room.seats[&1].player_id})
+      room = %{room | status: :playing, game: game, game_players: game_players}
 
       events =
         if Game.instant_win?(game),
@@ -218,6 +222,36 @@ defmodule TienLen.Room do
   def seat_of(room, player_id) do
     Enum.find_value(room.seats, fn {seat, p} -> if p.player_id == player_id, do: seat end)
   end
+
+  @doc """
+  The result of the finished game, for `TienLen.Stats.record/1`: every player dealt in, with
+  their place (1-based group of the ranking, so instant-win losers share place 2), whether they
+  won (place 1) and whether they were removed.
+  """
+  @spec result(t()) :: map() | nil
+  def result(%__MODULE__{game: %Game{phase: :finished} = game} = room) do
+    players =
+      for {group, place} <- Enum.with_index(game.ranking, 1),
+          seat <- group,
+          Map.has_key?(room.game_players, seat) do
+        %{
+          user_id: room.game_players[seat],
+          seat: seat,
+          place: place,
+          won: place == 1,
+          removed: seat in game.removed
+        }
+      end
+
+    %{
+      room_id: room.id,
+      player_count: length(game.seats),
+      instant_win: Game.instant_win?(game),
+      players: players
+    }
+  end
+
+  def result(_room), do: nil
 
   @doc "The seat whose turn it is, or `nil`."
   @spec current_seat(t()) :: seat() | nil

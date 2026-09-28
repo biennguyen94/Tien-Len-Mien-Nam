@@ -26,6 +26,8 @@ defmodule TienLen.RoomServer do
 
   use GenServer, restart: :temporary
 
+  require Logger
+
   alias TienLen.{Deck, Room}
 
   @turn_timeout 20_000
@@ -133,6 +135,11 @@ defmodule TienLen.RoomServer do
        turn_timeout: Keyword.get(opts, :turn_timeout, @turn_timeout),
        disconnect_timeout: Keyword.get(opts, :disconnect_timeout, @disconnect_timeout),
        deals: Keyword.get(opts, :deals, []),
+       # module with record/1 called at game over (TienLen.Stats in dev/prod, off in tests)
+       recorder:
+         Keyword.get_lazy(opts, :recorder, fn ->
+           Application.get_env(:tien_len, :results_recorder, TienLen.Stats)
+         end),
        # %{ref, seat, deadline} of the running turn timer
        turn: nil,
        # player_id => timer ref
@@ -295,6 +302,7 @@ defmodule TienLen.RoomServer do
   # Applies a new room, reschedules the turn timer and broadcasts the public events.
   defp changed(state, room, events) do
     state = %{state | room: room, version: state.version + 1} |> reschedule_turn(events)
+    if Enum.any?(events, &(elem(&1, 0) == :game_over)), do: record_result(state)
 
     Phoenix.PubSub.broadcast(
       TienLen.PubSub,
@@ -307,6 +315,22 @@ defmodule TienLen.RoomServer do
     end
 
     state
+  end
+
+  # Y6: a failing write is logged and never interrupts play.
+  defp record_result(%{recorder: nil}), do: :ok
+
+  defp record_result(%{recorder: recorder, room: room, id: id}) do
+    case Room.result(room) do
+      nil -> :ok
+      result -> recorder.record(result)
+    end
+  rescue
+    error ->
+      Logger.error("room #{id}: could not record the game result: #{Exception.message(error)}")
+  catch
+    kind, reason ->
+      Logger.error("room #{id}: could not record the game result: #{inspect({kind, reason})}")
   end
 
   defp turn_ms_left(%{turn: %{deadline: deadline}}), do: max(deadline - now(), 0)

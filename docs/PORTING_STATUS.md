@@ -16,7 +16,7 @@ Last updated: 2026-09-27
 | 10 | Tests / security / reconnect / deploy | **DONE** (2026-09-27): deployed on Docker (WSL), port 4020 |
 | 11 | Database foundation (Ecto + PostgreSQL) | **DONE** (2026-09-27) |
 | 12 | Accounts: register / login / logout | **DONE** (2026-09-28) |
-| 13 | Game results, leaderboard, history | NOT STARTED |
+| 13 | Game results, leaderboard, history | **DONE** (2026-09-28) |
 | 14 | Deploy with database | NOT STARTED |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
@@ -131,6 +131,7 @@ Interpretations taken to implement A1–A4 (confirm or override):
 | Y5 | Leaderboard details: every finished game is recorded for all its players, including instant-win games (each instant winner gets a win) and removed players (the game counts as played). Order: wins desc, win rate desc, games played asc, username. |
 | Y6 | The room process records results at game over. A database failure is logged and never interrupts play. |
 | Y7 | No login rate limiting in the first version (residual risk: password guessing; see RISKS). |
+| Y8 | The leaderboard and history pages also require login (consistent with A3). (Phase 13) |
 
 ### Project decisions
 
@@ -668,6 +669,59 @@ Interpretations taken to implement A1–A4 (confirm or override):
 ### NOT VERIFIED
 
 - The registration form in a real browser (the `phx-trigger-action` submit is covered by LiveView tests, not by a browser).
+
+## Phase 13 results (2026-09-28)
+
+### Delivered
+
+- **Migration** `create_games`:
+  - `games` (room id, player count, instant win, finished at);
+  - `game_players` (game, user, seat, place, won, removed), unique per game and user, deleted with the game or the user.
+- **`TienLen.Stats`:**
+  - `record/1`: one transaction; only integer (account) player ids; broadcasts `{:stats_updated}`;
+  - `leaderboard/1`: wins = 1st places (A1), games and win rate; order wins desc, rate desc, games asc, username asc (Y5);
+  - `user_standing/1`;
+  - `history/2`: newest first, with every player's place.
+- **`TienLen.Room`:**
+  - `game_players` snapshot (seat → player id) taken when a game starts, so a player who leaves mid-game is still recorded for the right account;
+  - `result/1`: places = ranking groups (instant-win losers share place 2), won = place 1, removed flag.
+- **`TienLen.RoomServer`:**
+  - records the result whenever the events contain `:game_over` (normal end, instant win at the deal, end by removal or leave);
+  - the recorder is `TienLen.Stats` by default, a room option `:recorder`, and off in tests (`config :tien_len, :results_recorder, nil`);
+  - a failing recorder is logged and never interrupts play (Y6).
+- **Pages** (login required, Y8):
+  - `/bang-xep-hang`: my standing plus the top 50, my row highlighted, live updates;
+  - `/lich-su`: my last 20 games, Vietnam time (UTC+7), places Nhất/Nhì/Ba/Bét, "Thua (tới trắng)" for instant-win losers, removed players marked, live updates.
+- **Header links:** "Bảng xếp hạng", "Lịch sử".
+
+### VERIFIED
+
+- `mix precommit`: **258 passed (2 doctests, 256 tests)**, no warnings. The full suite was run 10 more times: 0 failures.
+- **Stats tests:**
+  - wins / games / rate;
+  - tie-breaks: rate, then fewer games for players without a win, then username;
+  - instant win with two winners and a tied loser;
+  - a removed player counts as played;
+  - non-account ids ignored and `:skipped`;
+  - users without games are not listed;
+  - the broadcast;
+  - deleting a user deletes their results;
+  - history order and places.
+- **Mutation checks on the ordering:** reversing wins, games or username in the `ORDER BY` each makes a test fail. The first version of the tests missed the games tie-break; a test for players without a win was added.
+- **Integration through `RoomServer` with the real recorder:**
+  - a 3-player game played to the end is stored with places 1/2/3;
+  - two players leaving mid-game are recorded as removed with their places;
+  - a raising recorder is logged, and the room still finishes the game.
+- **LiveView tests:**
+  - both pages require login;
+  - the leaderboard shows wins / games / 67% and my highlighted row, and updates without a reload;
+  - history shows places and instant wins;
+  - the header links are present.
+- **Dev environment:**
+  - the default recorder is `TienLen.Stats`;
+  - a script played real games through `RoomServer` on the dev database;
+  - over HTTP, `/bang-xep-hang` redirects when logged out; logged in, it lists "An 2 2 100%" and "Chi 0 2 0%", and `/lich-su` shows "28/09/2026 07:00 · 2 người" with the places.
+  - Dev-database users `smoke_an` and `smoke_chi` and their games were created for this check.
 
 ## Environment state
 

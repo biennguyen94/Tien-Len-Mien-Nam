@@ -45,6 +45,12 @@ defmodule TienLenWeb.Layouts do
         </.link>
       </div>
       <div class="flex-none flex items-center gap-2">
+        <.link :if={@current_user} navigate={~p"/bang-xep-hang"} class="btn btn-ghost btn-sm">
+          Bảng xếp hạng
+        </.link>
+        <.link :if={@current_user} navigate={~p"/lich-su"} class="btn btn-ghost btn-sm">
+          Lịch sử
+        </.link>
         <span :if={@current_user} id="current-user" class="text-sm">
           {@current_user.display_name}
           <span class="text-base-content/60">(@{@current_user.username})</span>

@@ -31,6 +31,8 @@ defmodule TienLenWeb.Router do
     # rooms: login required (A3)
     live_session :authenticated, on_mount: {TienLenWeb.UserAuth, :require_user} do
       live "/phong/:id", TableLive
+      live "/bang-xep-hang", LeaderboardLive
+      live "/lich-su", HistoryLive
     end
   end
 

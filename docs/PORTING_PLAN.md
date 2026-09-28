@@ -116,10 +116,11 @@ Tien-Len-Mien-Nam/
 - [x] Tests: 240 passing; HTTP check of login/logout on the dev server.
 - Tests: validation, unique username (case-insensitive), wrong password, session fixation (renewed session), logout disconnects LiveViews, pages require login, the room player id is the user id.
 
-## Phase 13 — Results, leaderboard, history (A1, Y5, Y6)
+## Phase 13 — Results, leaderboard, history (A1, Y5, Y6, Y8) — DONE (2026-09-28)
 
-- [ ] `games` and `game_players` tables; the room records every finished game.
-- [ ] `/bang-xep-hang` leaderboard; personal history of recent games.
+- [x] `games` and `game_players` tables; the room records every finished game.
+- [x] `/bang-xep-hang` leaderboard; `/lich-su` personal history of recent games (both live, login required).
+- [x] Tests: 258 passing; ordering mutation-checked; dev-database check over HTTP.
 - Tests: normal game, instant win (several winners), removed players, ordering, a DB failure does not stop play.
 
 ## Phase 14 — Deploy with database
