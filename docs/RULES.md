@@ -247,6 +247,12 @@ Coins are virtual and only exist inside the game (C1). **All amounts are compute
 | T24 | **Thối heo** (C8, E4): at game over, the last player still holding cards pays 1×S per black 2 and 2×S per red 2 in their hand to the player ranked just above them. |
 | T25 | **Not enough coins** (C9, E5): a debtor pays at most their balance; several creditors share proportionally; the total is always 0. |
 
+## 17a. Bots (B1–B6)
+
+- Only the host adds or removes bots, while waiting, and **only in rooms with stake 0**. A stake cannot be set while a bot sits.
+- Bots play by these rules like any player (same validation, same turn timer as a fallback), see only their own hand, never become host, and do not keep a room open without humans.
+- Games with a bot move no coins (stake 0) and are **not recorded** in the leaderboard or history.
+
 ## 18. Rule ↔ decision map
 
 | Rule | Decisions |

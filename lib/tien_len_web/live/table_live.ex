@@ -38,6 +38,9 @@ defmodule TienLenWeb.TableLive do
       |> assign(:inviting, false)
       |> assign(:candidates, [])
       |> assign(:place, nil)
+      # H1 hints (cycled by the button) and the hand order (M2), both local to this page
+      |> assign(:hint_i, 0)
+      |> assign(:sort, :rank)
 
     cond do
       not connected?(socket) ->
@@ -135,6 +138,38 @@ defmodule TienLenWeb.TableLive do
     end
   end
 
+  # B1: the host adds / removes bots (the room server checks host, waiting, stake 0)
+  def handle_event("add_bot", %{"level" => level}, socket) when level in ["easy", "normal"],
+    do: act(socket, &RoomServer.add_bot(&1, &2, String.to_existing_atom(level)))
+
+  def handle_event("remove_bot", %{"seat" => seat}, socket) do
+    case Integer.parse(to_string(seat)) do
+      {seat, ""} -> act(socket, &RoomServer.remove_bot(&1, &2, seat))
+      _ -> {:noreply, socket}
+    end
+  end
+
+  # H1: each click selects the next legal play, weakest first
+  def handle_event("hint", _params, socket) do
+    case RoomServer.hints(socket.assigns.room_id, socket.assigns.player_id) do
+      [] ->
+        {:noreply, put_flash(socket, :error, "Không có bài nào đánh được, hãy bỏ lượt")}
+
+      hints ->
+        i = rem(socket.assigns.hint_i, length(hints))
+
+        {:noreply,
+         socket
+         |> assign(selected: MapSet.new(Enum.at(hints, i)), hint_i: i + 1)
+         |> refresh_checks()}
+    end
+  end
+
+  # M2: hand order, by rank (default) or by suit
+  def handle_event("sort", _params, socket),
+    do:
+      {:noreply, assign(socket, :sort, if(socket.assigns.sort == :rank, do: :suit, else: :rank))}
+
   # G11: the host hides the room from the lobby list, or shows it again
   def handle_event("toggle_private", _params, socket) do
     private? = !(socket.assigns.view && socket.assigns.view.private)
@@ -196,7 +231,7 @@ defmodule TienLenWeb.TableLive do
         deadline = view.turn_ms_left && now() + view.turn_ms_left
 
         socket
-        |> assign(view: view, selected: selected, deadline: deadline, now: now())
+        |> assign(view: view, selected: selected, deadline: deadline, now: now(), hint_i: 0)
         |> refresh_checks()
         |> track_place(view)
     end
@@ -236,6 +271,9 @@ defmodule TienLenWeb.TableLive do
 
   defp my_hand(socket),
     do: (socket.assigns.view && socket.assigns.view.game && socket.assigns.view.game.hand) || []
+
+  defp sorted_hand(hand, :rank), do: Card.sort(hand)
+  defp sorted_hand(hand, :suit), do: Enum.sort_by(hand, &{Card.suit_index(&1.suit), &1.rank})
 
   defp selected_list(socket), do: socket.assigns.selected |> MapSet.to_list() |> Card.sort()
   defp now, do: System.monotonic_time(:millisecond)
@@ -371,23 +409,30 @@ defmodule TienLenWeb.TableLive do
           Nước đầu phải có {Text.card(@view.game.must_include)}
         </p>
 
-        <div id="hand" class="flex flex-wrap justify-center gap-1 pt-4">
+        <div id="hand" class="flex flex-nowrap sm:flex-wrap justify-center sm:gap-1 pt-4 px-1">
           <button
-            :for={card <- @view.game.hand}
+            :for={card <- sorted_hand(@view.game.hand, @sort)}
             id={"card-" <> Card.to_code(card)}
             phx-click="toggle"
             phx-value-card={Card.to_code(card)}
             class={[
-              "transition-transform",
+              "transition-transform -ml-6 first:ml-0 sm:ml-0 shrink-0",
               card in @selected && "-translate-y-3 ring-2 ring-primary rounded-md"
             ]}
             aria-pressed={to_string(card in @selected)}
           >
-            <.card card={card} />
+            <.card card={card} class="w-12 sm:w-16" />
           </button>
         </div>
 
-        <div id="actions" class="flex flex-wrap justify-center gap-2">
+        <div
+          id="actions"
+          class="sticky bottom-0 z-30 bg-base-100/95 py-2 flex flex-wrap justify-center gap-2"
+        >
+          <button id="hint" phx-click="hint" class="btn btn-outline btn-sm sm:btn-md">Gợi ý</button>
+          <button id="sort" phx-click="sort" class="btn btn-ghost btn-sm sm:btn-md">
+            {if @sort == :rank, do: "Xếp theo chất", else: "Xếp theo số"}
+          </button>
           <button
             id="play"
             phx-click="play"
@@ -438,7 +483,7 @@ defmodule TienLenWeb.TableLive do
     <div
       id={"seat-#{@seat}"}
       class={[
-        "rounded-box border px-3 py-2 min-w-32 text-center",
+        "rounded-box border px-2 py-1 sm:px-3 sm:py-2 min-w-24 sm:min-w-32 text-center text-sm sm:text-base",
         @game && @game.current == @seat && @view.status == :playing && "border-primary bg-primary/10",
         !(@game && @game.current == @seat && @view.status == :playing) && "border-base-300"
       ]}
@@ -449,8 +494,18 @@ defmodule TienLenWeb.TableLive do
           <span :if={@player.host} title="Chủ phòng">👑</span>
           {@player.name}
           <span :if={@seat == @view.me} class="text-xs text-base-content/60">(bạn)</span>
+          <span :if={@player.bot} class="badge badge-info badge-xs" title="Máy chơi">🤖</span>
           <span :if={!@player.connected} class="badge badge-ghost badge-xs">mất kết nối</span>
         </p>
+        <button
+          :if={@player.bot && @view.host == @view.me && @view.status == :waiting}
+          id={"remove-bot-#{@seat}"}
+          phx-click="remove_bot"
+          phx-value-seat={@seat}
+          class="btn btn-ghost btn-xs"
+        >
+          Bỏ máy
+        </button>
         <p :if={@view.balances[@seat]} class="text-xs tabular-nums">
           🪙 {Text.coins(@view.balances[@seat])}
           <span
@@ -497,7 +552,7 @@ defmodule TienLenWeb.TableLive do
     <%= cond do %>
       <% @view.game && @view.game.centre -> %>
         <div class="flex flex-wrap justify-center gap-1">
-          <.card :for={card <- @view.game.centre.cards} card={card} class="w-12 sm:w-14" />
+          <.card :for={card <- @view.game.centre.cards} card={card} class="w-10 sm:w-14" />
         </div>
         <p class="text-sm">
           {Text.combo_type(@view.game.centre.type)} · {player(@view, @view.game.centre.owner).name}
@@ -577,6 +632,31 @@ defmodule TienLenWeb.TableLive do
           {if @view.private, do: "Hiện phòng trong sảnh", else: "Chuyển sang riêng tư"}
         </button>
       </div>
+
+      <div
+        :if={@view.host == @view.me and length(@view.players) < 4}
+        id="bots"
+        class="flex flex-wrap justify-center items-center gap-2"
+      >
+        <%= if @view.stake == 0 do %>
+          <button
+            :for={{level, label} <- TienLen.Bot.levels()}
+            id={"add-bot-#{level}"}
+            phx-click="add_bot"
+            phx-value-level={level}
+            class="btn btn-sm btn-outline btn-info"
+          >
+            + Máy ({label})
+          </button>
+        <% else %>
+          <span class="text-xs text-base-content/60">
+            Chỉ thêm máy được ở phòng chơi vui (cược 0).
+          </span>
+        <% end %>
+      </div>
+      <p :if={Enum.any?(@view.players, & &1.bot)} class="text-xs text-base-content/60">
+        Ván có máy chơi không tính coin và không vào bảng xếp hạng.
+      </p>
 
       <ul
         :if={@inviting}

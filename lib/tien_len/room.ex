@@ -82,7 +82,8 @@ defmodule TienLen.Room do
     with {:ok, seat} <- fetch_seat(room, player_id),
          :ok <- if(seat == room.host, do: :ok, else: {:error, :not_host}),
          :ok <- if(room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
-         :ok <- if(valid_stake?(stake), do: :ok, else: {:error, :invalid_stake}) do
+         :ok <- if(valid_stake?(stake), do: :ok, else: {:error, :invalid_stake}),
+         :ok <- if(stake == 0 or not bots?(room), do: :ok, else: {:error, :bots_need_free_room}) do
       {:ok, %{room | stake: stake}, [{:stake_changed, stake}]}
     end
   end
@@ -97,6 +98,58 @@ defmodule TienLen.Room do
       {:ok, %{room | private: private?}, [{:private_changed, private?}]}
     end
   end
+
+  # -- bots (B1–B6) ------------------------------------------------------------------
+
+  @doc "True for a bot's player id (`{:bot, n}`)."
+  def bot_id?({:bot, _}), do: true
+  def bot_id?(_), do: false
+
+  @doc "Seats of human players."
+  def humans(room), do: for({seat, p} <- room.seats, not bot_id?(p.player_id), do: seat)
+
+  @doc "True if any seat is a bot."
+  def bots?(room), do: Enum.any?(room.seats, fn {_seat, p} -> bot_id?(p.player_id) end)
+
+  @doc """
+  The host adds a bot of `level` (`:easy` / `:normal`) to a free seat, while waiting, in a
+  room without stake only (B2). The bot is always connected and never becomes host (B4).
+  """
+  @spec add_bot(t(), player_id(), term()) :: result()
+  def add_bot(room, player_id, level) do
+    with {:ok, seat} <- fetch_seat(room, player_id),
+         :ok <- if(seat == room.host, do: :ok, else: {:error, :not_host}),
+         :ok <- if(room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
+         :ok <- if(level in [:easy, :normal], do: :ok, else: {:error, :unknown_command}),
+         :ok <- if(room.stake == 0, do: :ok, else: {:error, :bots_need_free_room}),
+         :ok <- if(map_size(room.seats) < @max_seats, do: :ok, else: {:error, :room_full}) do
+      n = Enum.find(1..@max_seats, &(not Map.has_key?(bot_numbers(room), &1)))
+      name = "Máy #{n} (#{TienLen.Bot.label(level)})"
+      free = Enum.find(0..(@max_seats - 1), &(not Map.has_key?(room.seats, &1)))
+      bot = %{player_id: {:bot, n}, name: name, connected: true, bot: level}
+      {:ok, %{room | seats: Map.put(room.seats, free, bot)}, [{:joined, free}]}
+    end
+  end
+
+  @doc "The host removes a bot, while waiting."
+  @spec remove_bot(t(), player_id(), seat()) :: result()
+  def remove_bot(room, player_id, bot_seat) do
+    with {:ok, seat} <- fetch_seat(room, player_id),
+         :ok <- if(seat == room.host, do: :ok, else: {:error, :not_host}),
+         :ok <- if(room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
+         %{player_id: {:bot, _} = bot_id} <- room.seats[bot_seat] || {:error, :not_found} do
+      leave(room, bot_id)
+    else
+      %{} -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  @doc "The bot level of a seat, or `nil` for a human."
+  def bot_level(room, seat), do: room.seats[seat] && Map.get(room.seats[seat], :bot)
+
+  defp bot_numbers(room),
+    do: for({_s, %{player_id: {:bot, n}}} <- room.seats, into: %{}, do: {n, true})
 
   # -- membership ---------------------------------------------------------------
 
@@ -308,6 +361,15 @@ defmodule TienLen.Room do
   """
   @spec result(t()) :: map() | nil
   def result(%__MODULE__{game: %Game{phase: :finished} = game} = room) do
+    # B3: games with a bot are not recorded (no leaderboard / history)
+    if Enum.any?(room.game_players, fn {_seat, id} -> bot_id?(id) end),
+      do: nil,
+      else: record(room, game)
+  end
+
+  def result(_room), do: nil
+
+  defp record(room, game) do
     players =
       for {group, place} <- Enum.with_index(game.ranking, 1),
           seat <- group,
@@ -329,8 +391,6 @@ defmodule TienLen.Room do
       players: players
     }
   end
-
-  def result(_room), do: nil
 
   @doc "The seat whose turn it is, or `nil`."
   @spec current_seat(t()) :: seat() | nil
@@ -355,7 +415,13 @@ defmodule TienLen.Room do
         room.seats
         |> Enum.sort()
         |> Enum.map(fn {seat, p} ->
-          %{seat: seat, name: p.name, connected: p.connected, host: seat == room.host}
+          %{
+            seat: seat,
+            name: p.name,
+            connected: p.connected,
+            host: seat == room.host,
+            bot: Map.get(p, :bot)
+          }
         end),
       game: room.game && Game.view(room.game, me)
     }
@@ -386,7 +452,8 @@ defmodule TienLen.Room do
 
   # Host passes to the next remaining seat in seat order (S6).
   defp transfer_host_if(%__MODULE__{host: seat} = room, seat) do
-    seats = room.seats |> Map.keys() |> Enum.sort()
+    # B4: a bot never becomes host
+    seats = room |> humans() |> Enum.sort()
     connected = Enum.filter(seats, &room.seats[&1].connected)
     pool = if connected != [], do: connected, else: seats
     new_host = Enum.find(pool, &(&1 > seat)) || List.first(pool)

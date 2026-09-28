@@ -28,7 +28,7 @@ defmodule TienLen.RoomServer do
 
   require Logger
 
-  alias TienLen.{Deck, Room}
+  alias TienLen.{Bot, Deck, Room}
 
   @turn_timeout 20_000
   @disconnect_timeout 20_000
@@ -126,6 +126,15 @@ defmodule TienLen.RoomServer do
   @doc "The host changes the room's stake between games (E7)."
   def set_stake(room_id, player_id, stake), do: call(room_id, {:set_stake, player_id, stake})
 
+  @doc "The host adds a bot (`:easy` / `:normal`) to a free seat (B1, B2)."
+  def add_bot(room_id, player_id, level), do: call(room_id, {:add_bot, player_id, level})
+
+  @doc "The host removes the bot in `seat`."
+  def remove_bot(room_id, player_id, seat), do: call(room_id, {:remove_bot, player_id, seat})
+
+  @doc "Legal plays for the player right now (H1): on their turn, else out-of-turn chops."
+  def hints(room_id, player_id), do: call(room_id, {:hints, player_id})
+
   @doc "The host makes the room private (hidden from the lobby) or public (G11)."
   def set_private(room_id, player_id, private?),
     do: call(room_id, {:set_private, player_id, private?})
@@ -204,6 +213,12 @@ defmodule TienLen.RoomServer do
        chain_no: 0,
        # %{ref, seat, deadline} of the running turn timer
        turn: nil,
+       # B5: pending bot action (ref) and the delay before a bot acts
+       bot_ref: nil,
+       bot_delay:
+         Keyword.get_lazy(opts, :bot_delay, fn ->
+           Application.get_env(:tien_len, :bot_delay, 1_000)
+         end),
        # player_id => timer ref
        disconnect_timers: %{},
        # monitored pid => {player_id, monitor ref}
@@ -285,6 +300,30 @@ defmodule TienLen.RoomServer do
 
   def handle_call({:set_private, player_id, private?}, _from, state) do
     reply_change(state, Room.set_private(state.room, player_id, private?))
+  end
+
+  def handle_call({:add_bot, player_id, level}, _from, state) do
+    reply_change(state, Room.add_bot(state.room, player_id, level))
+  end
+
+  def handle_call({:remove_bot, player_id, seat}, _from, state) do
+    reply_change(state, Room.remove_bot(state.room, player_id, seat))
+  end
+
+  def handle_call({:hints, player_id}, _from, state) do
+    room = state.room
+
+    hints =
+      with :playing <- room.status,
+           seat when seat != nil <- Room.seat_of(room, player_id) do
+        if room.game.current == seat,
+          do: TienLen.Hint.moves(room.game, seat),
+          else: TienLen.Hint.chops(room.game, seat)
+      else
+        _ -> []
+      end
+
+    {:reply, hints, state}
   end
 
   def handle_call({:seated?, player_id}, _from, state),
@@ -371,8 +410,40 @@ defmodule TienLen.RoomServer do
 
   @impl true
   def handle_info(:idle_check, state) do
-    if map_size(state.room.seats) == 0, do: {:stop, :normal, state}, else: {:noreply, state}
+    if Room.humans(state.room) == [], do: {:stop, :normal, state}, else: {:noreply, state}
   end
+
+  # B5: a bot acts (an out-of-turn chop first, else its own turn). The command goes through
+  # the normal rules; if it is refused anyway the bot's turn is handled like a timeout.
+  def handle_info({:bot_act, ref}, %{bot_ref: ref} = state) do
+    state = %{state | bot_ref: nil}
+    room = state.room
+
+    result =
+      case room.status == :playing && bot_command(room) do
+        {bot_id, cmd} ->
+          case Room.command(room, bot_id, cmd) do
+            {:ok, _, _} = ok ->
+              ok
+
+            {:error, _} when is_tuple(cmd) and elem(cmd, 0) == :chop ->
+              {:error, :skip}
+
+            {:error, _} ->
+              Room.turn_timeout(room)
+          end
+
+        _ ->
+          {:error, :no_bot}
+      end
+
+    case result do
+      {:ok, room, events} -> {:noreply, changed(state, room, events)}
+      {:error, _} -> {:noreply, state}
+    end
+  end
+
+  def handle_info({:bot_act, _stale}, state), do: {:noreply, state}
 
   def handle_info({:DOWN, mref, :process, pid, _reason}, state) do
     case state.pids do
@@ -433,7 +504,8 @@ defmodule TienLen.RoomServer do
   defp reply_change(state, {:ok, room, events}, before) do
     state = changed(before.(state), room, events)
 
-    if map_size(room.seats) == 0,
+    # the room closes when no human is left (bots alone never keep it open, B4)
+    if Room.humans(room) == [],
       do: {:stop, :normal, :ok, state},
       else: {:reply, :ok, state}
   end
@@ -441,14 +513,20 @@ defmodule TienLen.RoomServer do
   defp reply_change(state, {:error, _} = error, _before), do: {:reply, error, state}
 
   defp maybe_stop(state) do
-    if Enum.any?(state.room.seats, fn {_seat, p} -> p.connected end),
-      do: {:noreply, state},
-      else: {:stop, :normal, state}
+    if Enum.any?(state.room.seats, fn {_seat, p} ->
+         p.connected and not Room.bot_id?(p.player_id)
+       end),
+       do: {:noreply, state},
+       else: {:stop, :normal, state}
   end
 
   # Applies a new room, reschedules the turn timer and broadcasts the public events.
   defp changed(state, room, events) do
-    state = %{state | room: room, version: state.version + 1} |> reschedule_turn(events)
+    state =
+      %{state | room: room, version: state.version + 1}
+      |> reschedule_turn(events)
+      |> schedule_bot()
+
     if Enum.any?(events, &(elem(&1, 0) == :game_over)), do: record_result(state)
     {state, events} = settle_coins(state, events)
 
@@ -538,7 +616,11 @@ defmodule TienLen.RoomServer do
   end
 
   defp player_balances(state) do
-    state.room.seats |> Map.values() |> Enum.map(& &1.player_id) |> state.economy.balances()
+    state.room.seats
+    |> Map.values()
+    |> Enum.map(& &1.player_id)
+    |> Enum.filter(&is_integer/1)
+    |> state.economy.balances()
   rescue
     _ -> %{}
   end
@@ -565,6 +647,43 @@ defmodule TienLen.RoomServer do
     kind, reason ->
       Logger.error("room #{id}: could not record the game result: #{inspect({kind, reason})}")
   end
+
+  # -- bots (B5) ----------------------------------------------------------------------
+
+  # After every change: if a bot has something to do, it acts after `bot_delay` ms. A newer
+  # change replaces the pending action (its ref goes stale).
+  defp schedule_bot(state) do
+    if state.room.status == :playing and bot_command(state.room) do
+      ref = make_ref()
+      Process.send_after(self(), {:bot_act, ref}, state.bot_delay)
+      %{state | bot_ref: ref}
+    else
+      %{state | bot_ref: nil}
+    end
+  end
+
+  # {bot_id, command} for the next bot action, or nil
+  defp bot_command(room) do
+    game = room.game
+
+    chop =
+      Enum.find_value(room.seats, fn {seat, p} ->
+        level = Map.get(p, :bot)
+        cards = level && seat != game.current && Bot.chop(game, seat, level)
+        if cards, do: {p.player_id, {:chop, cards}}
+      end)
+
+    chop || turn_command(room, game)
+  end
+
+  defp turn_command(room, %{current: seat} = game) when seat != nil do
+    case room.seats[seat] do
+      %{bot: level, player_id: id} -> {id, Bot.decide(game, seat, level)}
+      _ -> nil
+    end
+  end
+
+  defp turn_command(_room, _game), do: nil
 
   defp turn_ms_left(%{turn: %{deadline: deadline}}), do: max(deadline - now(), 0)
   defp turn_ms_left(_state), do: nil

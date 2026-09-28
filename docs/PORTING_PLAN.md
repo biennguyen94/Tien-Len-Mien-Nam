@@ -205,3 +205,15 @@ Tien-Len-Mien-Nam/
 ## Phase 28 — Chat and invites: deploy — DONE (2026-09-28)
 
 - [x] Migrations on the containers; smoke test; DEPLOY.md.
+
+## Phase 29 — Hints (H1) — DONE (2026-09-28)
+
+- [x] `TienLen.Hint` (candidates validated by `Game`), `RoomServer.hints/2`, "Gợi ý" button.
+
+## Phase 30 — Bots (B1–B6) — DONE (2026-09-28)
+
+- [x] `TienLen.Bot` (dễ / thường), add / remove in rooms without stake, scheduled bot actions, no host, no records.
+
+## Phase 31 — Phone layout, hand order; deploy (M1, M2) — DONE (2026-09-28)
+
+- [x] Overlapping hand, compact seats, sticky actions, sort toggle; deployed.

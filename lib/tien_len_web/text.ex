@@ -66,7 +66,8 @@ defmodule TienLenWeb.Text do
     not_enough_coins_to_join: "Bạn không đủ coin cho mức cược của phòng này",
     cannot_mute_self: "Không thể tự cấm chat mình",
     not_muted: "Người này không bị cấm chat",
-    invalid_duration: "Thời hạn không hợp lệ"
+    invalid_duration: "Thời hạn không hợp lệ",
+    bots_need_free_room: "Máy chơi chỉ có ở phòng chơi vui (cược 0)"
   }
 
   @types %{

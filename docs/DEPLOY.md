@@ -107,6 +107,10 @@ docker compose ps                                                               
 
 ## Verification
 
+### Phases 29–31 (2026-09-28), bots, hints, phone layout
+
+- Redeployed (no migration). Via `rpc`: a human plus 3 bots played a game to the end; a 5th seat was refused; no game was recorded.
+
 ### Phases 24–28 (2026-09-28), chat and invites
 
 - The `add_chat_invites` migration ran at start (`users.accept_invites`, `users.muted_until`).

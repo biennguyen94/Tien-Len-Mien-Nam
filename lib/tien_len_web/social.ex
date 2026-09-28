@@ -237,7 +237,10 @@ defmodule TienLenWeb.Social do
       </div>
     </div>
 
-    <div id="social" class="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
+    <div
+      id="social"
+      class="fixed bottom-20 sm:bottom-4 right-2 sm:right-4 z-40 flex flex-col items-end gap-2"
+    >
       <div
         :if={@social.open}
         id="social-panel"

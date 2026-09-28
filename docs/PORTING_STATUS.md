@@ -32,6 +32,9 @@ Last updated: 2026-09-28
 | 26 | Invites: popup, "Chép link", "Không nhận lời mời" | **DONE** (2026-09-28) |
 | 27 | Private rooms, admin chat moderation | **DONE** (2026-09-28) |
 | 28 | Chat and invites: deploy | **DONE** (2026-09-28) |
+| 29 | Hints (Gợi ý) | **DONE** (2026-09-28) |
+| 30 | Bots | **DONE** (2026-09-28) |
+| 31 | Phone layout, hand order; deploy | **DONE** (2026-09-28) |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -232,6 +235,22 @@ Interpretations taken to implement CH1–IV3 (confirm or override):
 | G10 | **"Chép link"** copies the full room URL (a small clipboard JS hook, no game logic). A logged-out player opening the link logs in and is then **sent back to that room**. |
 | G11 | **Private rooms**: chosen by the host at creation and switchable by the host while waiting; hidden from the lobby list but not from admins. The room id (40 random bits) is the secret: anyone with the link can join. |
 | G12 | **Admin moderation**: mute a player in all chats for 10 min / 1 h / 24 h (`users.muted_until`, survives restart), delete a room or lobby message (removed live for everyone). Both audited. Admins cannot read private chats (they are not stored). |
+
+### Batch 10 — bots, hints, phone layout (2026-09-28)
+
+The owner asked for #1 bots, #2 phone layout and #3 hints and said not to ask ("ko cần hỏi ý tôi, cứ implement"). The decisions below were **taken by Claude** on that basis. The owner may override any of them.
+
+| # | Decision (Claude, on the owner's instruction) |
+|---|---|
+| B1 | **Bots** ("máy"): the host adds a bot to a free seat while the room is waiting ("+ Máy (dễ)" / "+ Máy (thường)") and can remove it ("Bỏ máy"). Bots run on the server and play through the same rules as players; they only see their own hand. |
+| B2 | **Bots only in rooms without stake** (cược 0). Adding a bot to a stake room, or setting a stake while a bot sits, is refused (`bots_need_free_room`). So no coins are ever created for or paid to a bot. |
+| B3 | **Games with a bot are not recorded**: not in the leaderboard, not in the history (no farming 1st places against bots). |
+| B4 | A bot **never becomes host**. The room closes when no human is left; bots alone never keep a room open. |
+| B5 | A bot acts about **1 s** after its turn starts (config `:bot_delay`). If its command were ever refused, its turn is handled like a timeout. |
+| B6 | Two levels:<br>• **dễ** leads its lowest single, answers with the weakest legal play, never chops;<br>• **thường** leads the biggest group holding its lowest card, avoids breaking pairs, keeps 2s and bombs for when they matter, and chops a 2 out of turn with a four-pair. |
+| H1 | **"Gợi ý"** button: each click selects the next legal play, weakest first; out of turn it offers four-pair chops. Hints are computed on the server and validated by `TienLen.Game` (CLAUDE.md rule 2). |
+| M1 | **Phone layout**: the hand fits one row on a phone (overlapping cards); compact seats; the action bar sticks to the bottom of the screen; the message button moves above it. |
+| M2 | **Hand order**: "Xếp theo chất" / "Xếp theo số" (display only, per page). |
 
 ### Project decisions
 
@@ -1024,6 +1043,49 @@ Interpretations taken to implement CH1–IV3 (confirm or override):
 - Chat, presence, invites and rate limits are in memory: a restart clears them (CH2). Single node only.
 - Collusion through chat is accepted (CH4, RISKS P17). There is no profanity filter or block button (CH3, IV3; RISKS P18).
 - NOT VERIFIED: the clipboard button and the chat auto-scroll in a real browser (JS hooks; LiveView tests do not run JS).
+
+## Phases 29–31 results — bots, hints, phone layout (2026-09-28)
+
+### Delivered
+
+- **Hints (H1):** `TienLen.Hint` (pure):
+  - builds candidates from the hand: sets, straights and runs of pairs, varying only the top card;
+  - keeps those that `Game.check_play/3` or `check_chop_out_of_turn/3` accept, sorted weakest first;
+  - `RoomServer.hints/2`; a "Gợi ý" button that cycles through them.
+- **Bots (B1–B6):**
+  - `TienLen.Bot` (pure `decide/3`, `chop/3`);
+  - `Room.add_bot/3`, `remove_bot/3`, `humans/1` (bot ids `{:bot, n}`, names "Máy n (dễ|thường)");
+  - the room server schedules bot actions after every change (`bot_ref`, `bot_delay`);
+  - the host never passes to a bot; the room closes when no human is left;
+  - `Room.result/1` is `nil` for games with a bot; stake guards on both sides.
+- **Phone layout (M1, M2):**
+  - the hand overlaps on small screens (`w-12`, `-ml-6`); compact seats; smaller centre cards;
+  - sticky action bar with "Gợi ý" and "Xếp theo chất / số"; the 💬 button sits above the bar on phones.
+- Deployed (no migration).
+
+### VERIFIED
+
+- `mix precommit`: **392 passed (2 doctests, 390 tests)**, no warnings; 40 runs of the bot tests and 6 full runs clean.
+- `test/tien_len/bot_test.exs`:
+  - candidates;
+  - hints on 300 random deals are all legal and hold the opening card; the weakest answer comes first; an empty list is correct;
+  - chops;
+  - easy / normal leads; normal keeps 2s unless pressed, plays out its last cards, does not break a pair, chops a 2; easy never chops;
+  - **200 bot-only games (2–4 players, mixed levels) finish with only legal commands**;
+  - add / remove rules (host, waiting, stake 0, full) and the stake guard;
+  - a human with 3 bots plays to game over and nothing is recorded;
+  - room hints are legal; host transfer skips bots; the room closes with bots only.
+- `test/tien_len_web/live/bot_live_test.exs`:
+  - add / remove bots in the page; a game against a bot starts;
+  - no bot buttons with a stake; guests refused;
+  - the hint selects a legal play and enables "Đánh"; sorting by suit.
+- **Production** (`rpc`): a human plus 3 bots (turn 50 ms, bots 20 ms) played to game over; a 5th seat was refused; the recorded-games count stayed 2; the lobby returns 200.
+- Two flaky tests found and fixed while writing: random deals that could be an instant win (fixed deal; the game-over event read from the first update too).
+
+### NOT VERIFIED
+
+- The phone layout on a real phone (LiveView tests check the markup, not the rendering).
+- The bots' playing strength is not measured. "Thường" is a simple heuristic, not a strong player.
 
 ## Environment state
 
