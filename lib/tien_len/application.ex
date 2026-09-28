@@ -11,6 +11,12 @@ defmodule TienLen.Application do
       TienLenWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:tien_len, :dns_cluster_query) || :ignore},
       TienLen.Repo,
+      # admin settings cache (F7), filled from the database once at start
+      {Task,
+       fn ->
+         if Application.get_env(:tien_len, :load_settings, true), do: TienLen.Settings.load()
+       end},
+      TienLen.LoginThrottle,
       {Phoenix.PubSub, name: TienLen.PubSub},
       # One TienLen.RoomServer per room, looked up by room id.
       {Registry, keys: :unique, name: TienLen.RoomRegistry},

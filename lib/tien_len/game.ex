@@ -290,6 +290,22 @@ defmodule TienLen.Game do
   def winner(_game), do: nil
 
   @doc """
+  Everything, for the admin watch view only (AD7, F6): all hands, undealt and discarded
+  cards, plus the public state. Never sent to players.
+  """
+  @spec admin_view(t()) :: map()
+  def admin_view(game) do
+    game
+    |> view(nil)
+    |> Map.merge(%{
+      hands: game.hands,
+      undealt: game.undealt,
+      discarded: game.discarded,
+      chain: game.chain
+    })
+  end
+
+  @doc """
   What `seat` may see (RULES T14). Other players' hands, undealt and discarded cards are never
   included, except the whole hands of instant winners (I8).
   """

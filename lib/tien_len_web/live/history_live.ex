@@ -36,7 +36,7 @@ defmodule TienLenWeb.HistoryLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
       <h1 class="text-xl font-bold">Lịch sử ván chơi</h1>
       <p :if={@games == []} id="no-games" class="text-base-content/70">Bạn chưa chơi xong ván nào.</p>
 

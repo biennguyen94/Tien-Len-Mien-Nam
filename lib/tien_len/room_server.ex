@@ -51,8 +51,8 @@ defmodule TienLen.RoomServer do
       else: do_start_room(opts)
   end
 
-  @doc "Maximum number of open rooms (`config :tien_len, :max_rooms`, default 500)."
-  def max_rooms, do: Application.get_env(:tien_len, :max_rooms, 500)
+  @doc "Maximum number of open rooms (admin setting `max_rooms`, default from config, F7)."
+  def max_rooms, do: TienLen.Settings.int("max_rooms")
 
   defp do_start_room(opts) do
     if Room.valid_stake?(Keyword.get(opts, :stake, 0)),
@@ -103,6 +103,15 @@ defmodule TienLen.RoomServer do
   def play(room_id, player_id, cards), do: call(room_id, {:command, player_id, {:play, cards}})
   def pass(room_id, player_id), do: call(room_id, {:command, player_id, :pass})
   def chop(room_id, player_id, cards), do: call(room_id, {:command, player_id, {:chop, cards}})
+
+  @doc "Admin watch view with every hand (AD7, F6). Only for TienLen.Admin."
+  def admin_view(room_id), do: call(room_id, :admin_view)
+
+  @doc "Admin closes the room; a running game is cancelled without coins or stats (AD6, F5)."
+  def admin_close(room_id), do: call(room_id, :admin_close)
+
+  @doc "Admin removes a player from the room; they cannot come back (AD6)."
+  def kick(room_id, player_id), do: call(room_id, {:kick, player_id})
 
   @doc "The host changes the room's stake between games (E7)."
   def set_stake(room_id, player_id, stake), do: call(room_id, {:set_stake, player_id, stake})
@@ -209,6 +218,34 @@ defmodule TienLen.RoomServer do
       error ->
         {:reply, error, state}
     end
+  end
+
+  def handle_call(:admin_view, _from, state) do
+    view =
+      state.room
+      |> Room.admin_view()
+      |> Map.put(:turn_ms_left, turn_ms_left(state))
+      |> Map.put(:coin_deltas, state.coin_deltas)
+      |> Map.put(:balances, seat_balances(state))
+
+    {:reply, view, state}
+  end
+
+  # F5: no game_over event is emitted, so nothing is recorded or settled for the running game.
+  def handle_call(:admin_close, _from, state) do
+    Phoenix.PubSub.broadcast(
+      TienLen.PubSub,
+      topic(state.id),
+      {:room_updated, state.id, state.version + 1, [{:closed_by_admin}]}
+    )
+
+    {:stop, :normal, :ok, state}
+  end
+
+  def handle_call({:kick, player_id}, _from, state) do
+    reply_change(state, Room.kick(state.room, player_id), fn state ->
+      state |> untrack_player(player_id) |> cancel_disconnect_timer(player_id)
+    end)
   end
 
   def handle_call({:set_stake, player_id, stake}, _from, state) do

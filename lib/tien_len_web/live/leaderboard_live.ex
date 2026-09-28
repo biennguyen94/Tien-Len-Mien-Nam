@@ -45,7 +45,7 @@ defmodule TienLenWeb.LeaderboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
       <h1 class="text-xl font-bold">Bảng xếp hạng</h1>
       <div role="tablist" class="tabs tabs-box w-fit">
         <.link

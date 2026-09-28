@@ -48,6 +48,7 @@ defmodule TienLen.Stats do
         game =
           Repo.insert!(%GameRecord{
             room_id: to_string(result.room_id),
+            ref: Map.get(result, :ref),
             player_count: result.player_count,
             instant_win: result.instant_win,
             finished_at: now

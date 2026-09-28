@@ -109,6 +109,17 @@ defmodule TienLenWeb.TableLive do
   # -- updates ------------------------------------------------------------------
 
   @impl true
+  # AD6 / F5: an admin closed the room (a running game is cancelled).
+  def handle_info({:room_updated, _id, _version, [{:closed_by_admin}]}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(
+       :error,
+       "Phòng đã bị quản trị viên đóng. Ván đang chơi (nếu có) bị hủy, không tính coin."
+     )
+     |> push_navigate(to: ~p"/")}
+  end
+
   def handle_info({:room_updated, _id, _version, _events}, socket), do: {:noreply, load(socket)}
   def handle_info(:tick, socket), do: {:noreply, assign(socket, :now, now())}
   def handle_info(_unexpected, socket), do: {:noreply, socket}
@@ -194,7 +205,7 @@ defmodule TienLenWeb.TableLive do
   @impl true
   def render(%{view: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
       <p id="joining" class="text-center text-base-content/70">Đang vào phòng…</p>
     </Layouts.app>
     """
@@ -204,7 +215,7 @@ defmodule TienLenWeb.TableLive do
     assigns = assign(assigns, :secs, seconds_left(assigns))
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} wide>
+    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
       <div class="flex flex-wrap items-center justify-between gap-2">
         <p>
           Phòng <span id="room-code" class="font-mono font-semibold">{@room_id}</span>

@@ -10,18 +10,31 @@ defmodule TienLenWeb.UserSessionController do
   alias TienLenWeb.UserAuth
 
   def create(conn, %{"user" => %{"username" => username, "password" => password} = params}) do
-    case Accounts.authenticate(username, password) do
+    # F8; IP counting can be turned off (tests share 127.0.0.1)
+    ip = if Application.get_env(:tien_len, :throttle_by_ip, true), do: conn.remote_ip
+
+    with :ok <- TienLen.LoginThrottle.check(username, ip),
+         %Accounts.User{} = user <- Accounts.authenticate(username, password) do
+      if Accounts.User.locked?(user) do
+        conn |> put_flash(:error, "Tài khoản đã bị khóa") |> redirect(to: ~p"/")
+      else
+        TienLen.LoginThrottle.success(username)
+        conn |> put_flash(:info, welcome(params, user)) |> UserAuth.log_in_user(user)
+      end
+    else
+      {:error, :throttled} ->
+        conn
+        |> put_flash(:error, "Đăng nhập sai quá nhiều lần. Thử lại sau 15 phút.")
+        |> redirect(to: ~p"/")
+
       nil ->
+        TienLen.LoginThrottle.failure(username, ip)
+
         # same message whether the account exists or not
         conn
         |> put_flash(:error, "Sai tài khoản hoặc mật khẩu")
         |> put_flash(:login_username, String.slice(to_string(username), 0, 20))
         |> redirect(to: ~p"/")
-
-      user ->
-        conn
-        |> put_flash(:info, welcome(params, user))
-        |> UserAuth.log_in_user(user)
     end
   end
 

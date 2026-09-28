@@ -94,6 +94,10 @@ if config_env() == :prod do
 
   config :tien_len, :max_rooms, String.to_integer(System.get_env("MAX_ROOMS", "500"))
 
+  # F8: also count failed logins per IP. Turn off when every client reaches the app from the
+  # same address (Docker port publishing on WSL, or a proxy without X-Forwarded-For handling).
+  config :tien_len, :throttle_by_ip, System.get_env("THROTTLE_BY_IP", "true") in ~w(true 1)
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

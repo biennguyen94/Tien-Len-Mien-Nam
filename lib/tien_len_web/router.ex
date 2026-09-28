@@ -28,6 +28,18 @@ defmodule TienLenWeb.Router do
       live "/", LobbyLive
     end
 
+    # admin area (AD1): unlocked admins only; every action is re-authorized by TienLen.Admin
+    live_session :admin, on_mount: {TienLenWeb.UserAuth, :require_admin} do
+      live "/quan-tri", Admin.DashboardLive
+      live "/quan-tri/nguoi-choi", Admin.UsersLive
+      live "/quan-tri/nguoi-choi/:id", Admin.UserLive
+      live "/quan-tri/phong", Admin.RoomsLive
+      live "/quan-tri/phong/:id", Admin.RoomWatchLive
+      live "/quan-tri/van", Admin.GamesLive
+      live "/quan-tri/nhat-ky", Admin.AuditLive
+      live "/quan-tri/cai-dat", Admin.SettingsLive
+    end
+
     # rooms: login required (A3)
     live_session :authenticated, on_mount: {TienLenWeb.UserAuth, :require_user} do
       live "/phong/:id", TableLive

@@ -26,17 +26,14 @@ defmodule TienLen.Economy do
   alias TienLen.Economy.CoinTransaction
   alias TienLen.Repo
 
-  @starting_coins 1_000
-  @daily_bonus 100
-  @relief 500
-  @relief_below 100
   # Vietnam has no daylight saving time: UTC+7 all year (E8)
   @vn_offset 7 * 3600
 
-  def starting_coins, do: @starting_coins
-  def daily_bonus, do: @daily_bonus
-  def relief, do: @relief
-  def relief_below, do: @relief_below
+  # F7: current values from TienLen.Settings (defaults = decision C2)
+  def starting_coins, do: TienLen.Settings.int("starting_coins")
+  def daily_bonus, do: TienLen.Settings.int("daily_bonus")
+  def relief, do: TienLen.Settings.int("relief")
+  def relief_below, do: TienLen.Settings.int("relief_below")
 
   def topic(user_id), do: "coins:#{user_id}"
   def subscribe(user_id), do: Phoenix.PubSub.subscribe(TienLen.PubSub, topic(user_id))
@@ -69,7 +66,7 @@ defmodule TienLen.Economy do
       user ->
         %{
           daily_bonus: user.daily_bonus_on != today,
-          relief: user.relief_on != today and user.coins < @relief_below
+          relief: user.relief_on != today and user.coins < relief_below()
         }
     end
   end
@@ -113,15 +110,18 @@ defmodule TienLen.Economy do
   coins. Used by `TienLen.Accounts.register_user/1` so the user and the grant commit together.
   """
   def grant_starting_coins(multi) do
+    # read once so the balance and the ledger line always agree (F7)
+    amount = starting_coins()
+
     multi
     |> Multi.update(:starting_coins, fn %{user: user} ->
-      Ecto.Changeset.change(user, coins: @starting_coins)
+      Ecto.Changeset.change(user, coins: amount)
     end)
     |> Multi.insert(:starting_coins_ledger, fn %{user: user} ->
       %CoinTransaction{
         user_id: user.id,
-        amount: @starting_coins,
-        balance_after: @starting_coins,
+        amount: amount,
+        balance_after: amount,
         reason: "registration"
       }
     end)
@@ -129,7 +129,7 @@ defmodule TienLen.Economy do
 
   @doc "Claims today's daily bonus (E8). `{:ok, balance}` or `{:error, :already_claimed | :not_found}`."
   def claim_daily_bonus(user_id, today \\ vn_today()) do
-    claim(user_id, "daily:#{user_id}:#{today}", @daily_bonus, "daily_bonus", fn user ->
+    claim(user_id, "daily:#{user_id}:#{today}", daily_bonus(), "daily_bonus", fn user ->
       if user.daily_bonus_on == today,
         do: {:error, :already_claimed},
         else: {:ok, [daily_bonus_on: today]}
@@ -137,14 +137,14 @@ defmodule TienLen.Economy do
   end
 
   @doc """
-  Claims relief when the balance is below #{@relief_below} (E8).
+  Claims relief when the balance is below the relief threshold (E8, setting `relief_below`).
   `{:ok, balance}` or `{:error, :already_claimed | :not_eligible | :not_found}`.
   """
   def claim_relief(user_id, today \\ vn_today()) do
-    claim(user_id, "relief:#{user_id}:#{today}", @relief, "relief", fn user ->
+    claim(user_id, "relief:#{user_id}:#{today}", relief(), "relief", fn user ->
       cond do
         user.relief_on == today -> {:error, :already_claimed}
-        user.coins >= @relief_below -> {:error, :not_eligible}
+        user.coins >= relief_below() -> {:error, :not_eligible}
         true -> {:ok, [relief_on: today]}
       end
     end)
@@ -198,6 +198,42 @@ defmodule TienLen.Economy do
       {0, _} -> {:error, :already_claimed}
     end
   end
+
+  @doc """
+  Admin coin adjustment (AD5, F4): adds (`amount > 0`) or removes (`amount < 0`) coins for one
+  user, recorded in the ledger as `admin_adjust` with the admin as counterparty and the reason
+  as ref. A removal larger than the balance is refused. `{:ok, balance}` or `{:error, reason}`.
+  """
+  def adjust(user_id, amount, reason, admin_id) when is_integer(amount) and amount != 0 do
+    result =
+      Repo.transaction(fn ->
+        with {:ok, user} <- lock_user(user_id),
+             :ok <- if(user.coins + amount >= 0, do: :ok, else: {:error, :insufficient_coins}) do
+          balance = user.coins + amount
+          user |> Ecto.Changeset.change(coins: balance) |> Repo.update!()
+
+          Repo.insert!(%CoinTransaction{
+            user_id: user_id,
+            amount: amount,
+            balance_after: balance,
+            reason: "admin_adjust",
+            counterparty_id: admin_id,
+            ref: String.slice(reason, 0, 255)
+          })
+
+          balance
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+
+    with {:ok, balance} <- result do
+      broadcast(user_id, balance)
+      {:ok, balance}
+    end
+  end
+
+  def adjust(_user_id, _amount, _reason, _admin_id), do: {:error, :invalid_amount}
 
   # -- settlements ----------------------------------------------------------------
 

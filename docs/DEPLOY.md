@@ -41,7 +41,8 @@ Docker host (WSL2)
 | `PHX_URL_SCHEME` | `http` | `https` behind a TLS proxy |
 | `PHX_URL_PORT` | `4020` | Public port in absolute URLs (`443` behind a TLS proxy) |
 | `PHX_FORCE_SSL` | off | `true` only behind HTTPS (needs `X-Forwarded-Proto`) |
-| `MAX_ROOMS` | `500` | Cap on open rooms (spam guard) |
+| `MAX_ROOMS` | `500` | Cap on open rooms (spam guard). Admins can override it on "Cài đặt" (stored in the database). |
+| `THROTTLE_BY_IP` | `true` | Also count failed logins per client IP (F8). Set to `false` on this WSL deploy: behind Docker every client has the gateway IP, so one counter would lock out everyone. Counting per username is always on. |
 | `WEB_PORT` | `4020` | Host port (compose variable) |
 
 LiveView websockets use `check_origin: :conn`: they accept the origin the page was served from.
@@ -60,6 +61,18 @@ docker exec tien-len bin/tien_len rpc 'IO.inspect(TienLen.Lobby.list_rooms())'  
 docker exec tien-len bin/migrate                                                  # migrations by hand
 docker compose exec db psql -U tien_len -d tien_len                               # SQL shell
 ```
+
+## Admins
+
+The first admin is created on the server (there is no sign-up for admins):
+
+```bash
+docker exec tien-len bin/tien_len rpc 'IO.inspect(TienLen.Admin.promote("username"))'   # {:ok, user}; audited as promote_server
+```
+
+After that, admins give or remove the role on the web (`/quan-tri/nguoi-choi/<id>`, "Cấp quyền admin"). Every admin action is in `/quan-tri/nhat-ky` (table `admin_actions`). Economy settings and the announcement live in the `settings` table and are loaded at start.
+
+Current admin: `bien`.
 
 ## Backup and restore
 
@@ -93,6 +106,18 @@ docker compose ps                                                               
 - Do not publish the database port.
 
 ## Verification
+
+### Phases 19–23 (2026-09-28), admin
+
+- The `add_admin` migration ran at container start; `THROTTLE_BY_IP=false` active.
+- `TienLen.Admin.promote("bien")` over `rpc`.
+- With two temporary accounts (`smoke_admin`, `smoke_player`), over HTTP:
+  - admin pages 200 for the admin, 302 for a player and anonymous; "Quản trị" link only for the admin;
+  - dashboard and audit log correct;
+  - a locked account's login shows "Tài khoản đã bị khóa";
+  - an announcement appeared on the lobby, then was cleared;
+  - after 5 wrong passwords the 6th login was refused.
+- Smoke accounts deleted afterwards; `bien` (admin) and `ai_ga` (a real player) kept.
 
 ### Phases 15–18 (2026-09-28), coins
 

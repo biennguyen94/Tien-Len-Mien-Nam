@@ -9,7 +9,7 @@ It started as a port of [nguyenank/tien-len](https://github.com/nguyenank/tien-l
 - instant wins (tới trắng);
 - several games per room, with turn and disconnect timeouts.
 
-**Status:** complete and deployed with PostgreSQL (Docker, http://localhost:4020): accounts (register / login / logout), leaderboard by 1st places, game history, virtual coins (stakes, chặt heo, thối heo, daily bonus; no real money). See `docs/PORTING_STATUS.md` and `docs/DEPLOY.md`.
+**Status:** complete and deployed with PostgreSQL (Docker, http://localhost:4020): accounts (register / login / logout), leaderboard by 1st places, game history, virtual coins (stakes, chặt heo, thối heo, daily bonus; no real money), and an admin area (`/quan-tri`: users, coin adjustments, rooms, game history, announcements, settings). See `docs/PORTING_STATUS.md` and `docs/DEPLOY.md`.
 
 - Rules: [`docs/RULES.md`](docs/RULES.md)
 - Plan: [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md)

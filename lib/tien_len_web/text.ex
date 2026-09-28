@@ -37,7 +37,23 @@ defmodule TienLenWeb.Text do
     invalid_stake: "Tiền cược phải là 0 hoặc từ 10 trở lên",
     already_claimed: "Hôm nay bạn đã nhận rồi",
     not_eligible: "Chỉ nhận được khi còn dưới 100 coin",
-    not_found: "Không tìm thấy"
+    not_found: "Không tìm thấy",
+    forbidden: "Bạn không có quyền làm việc này",
+    already_admin: "Người này đã là admin",
+    not_admin: "Người này không phải admin",
+    cannot_demote_self: "Không thể tự gỡ quyền admin của mình",
+    last_admin: "Không thể gỡ admin cuối cùng",
+    cannot_lock_self: "Không thể tự khóa tài khoản của mình",
+    cannot_lock_admin: "Không thể khóa tài khoản admin",
+    already_locked: "Tài khoản đã bị khóa từ trước",
+    not_locked: "Tài khoản không bị khóa",
+    insufficient_coins: "Không đủ coin để trừ",
+    invalid_amount: "Số coin không hợp lệ",
+    reason_required: "Hãy ghi lý do (3–200 ký tự)",
+    kicked: "Bạn đã bị mời ra khỏi phòng này",
+    announcement_too_long: "Thông báo tối đa 300 ký tự",
+    wrong_password: "Mật khẩu hiện tại không đúng",
+    throttled: "Đăng nhập sai quá nhiều lần. Thử lại sau 15 phút."
   }
 
   @types %{
@@ -84,7 +100,8 @@ defmodule TienLenWeb.Text do
     "place" => "Tiền hạng",
     "instant_win" => "Tới trắng",
     "chop" => "Chặt heo",
-    "thoi" => "Thối heo"
+    "thoi" => "Thối heo",
+    "admin_adjust" => "Quản trị viên điều chỉnh"
   }
 
   @doc "Label of a ledger reason."

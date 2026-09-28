@@ -19,6 +19,9 @@ defmodule TienLen.Accounts.User do
     field :coins, :integer, default: 0
     field :daily_bonus_on, :date
     field :relief_on, :date
+    # admin (AD1, F2): changed only by TienLen.Admin, never cast from user input
+    field :role, :string, default: "player"
+    field :locked_at, :utc_datetime
 
     timestamps type: :utc_datetime
   end
@@ -34,6 +37,22 @@ defmodule TienLen.Accounts.User do
     |> validate_password()
     |> hash_password()
   end
+
+  @doc "Changeset for a new password (reset by an admin or changed by the player, F3)."
+  def password_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:password])
+    |> validate_password()
+    |> hash_password()
+  end
+
+  @doc "True if the account is locked (F2)."
+  def locked?(%__MODULE__{locked_at: nil}), do: false
+  def locked?(%__MODULE__{}), do: true
+
+  @doc "True for an unlocked admin (AD1)."
+  def admin?(%__MODULE__{role: "admin"} = user), do: not locked?(user)
+  def admin?(_), do: false
 
   @doc "Changeset for changing the display name."
   def display_name_changeset(user, attrs) do

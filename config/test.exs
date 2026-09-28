@@ -20,6 +20,12 @@ config :tien_len, :results_recorder, nil
 # Coins are not settled by room processes in tests unless a test asks (room option :economy).
 config :tien_len, :economy, nil
 
+# Settings are not loaded from the database at start in tests (the sandbox is manual).
+config :tien_len, :load_settings, false
+
+# All test requests come from 127.0.0.1: count failed logins per username only (F8).
+config :tien_len, :throttle_by_ip, false
+
 config :tien_len, :sql_sandbox, Ecto.Adapters.SQL.Sandbox
 
 # We don't run a server during test. If one is required,

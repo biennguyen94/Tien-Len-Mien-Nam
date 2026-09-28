@@ -39,6 +39,26 @@ defmodule TienLen.Accounts do
   def get_user(id) when is_integer(id), do: Repo.get(User, id)
   def get_user(_), do: nil
 
+  @doc "Sets a new password (validated like registration)."
+  def set_password(%User{} = user, password) do
+    user |> User.password_changeset(%{password: password}) |> Repo.update()
+  end
+
+  @doc "The player changes their own password; the current one must be right (F3)."
+  def change_password(%User{} = user, current, new) do
+    if User.valid_password?(user, current),
+      do: set_password(user, new),
+      else: {:error, :wrong_password}
+  end
+
+  @doc "The user if it exists and is not locked (sessions of locked users are ignored, F2)."
+  def get_active_user(id) do
+    case get_user(id) do
+      %User{} = user -> if User.locked?(user), do: nil, else: user
+      nil -> nil
+    end
+  end
+
   @doc "Changes the display name."
   def change_display_name(%User{} = user, name) do
     user |> User.display_name_changeset(%{display_name: name}) |> Repo.update()

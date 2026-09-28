@@ -1,6 +1,6 @@
 # Porting status
 
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 | Phase | Name | Status |
 |---|---|---|
@@ -22,6 +22,11 @@ Last updated: 2026-09-27
 | 16 | Coins: settlement of games (places, instant win, chặt heo, thối heo) | **DONE** (2026-09-28) |
 | 17 | Coins: UI | **DONE** (2026-09-28) |
 | 18 | Coins: deploy | **DONE** (2026-09-28) |
+| 19 | Admin: roles, guard, audit log, set admin | **DONE** (2026-09-28) |
+| 20 | Admin: users (search, lock, rename, password, coins) | **DONE** (2026-09-28) |
+| 21 | Admin: dashboard, rooms (watch, close, kick), game history | **DONE** (2026-09-28) |
+| 22 | Admin: announcements, economy settings, login rate limit | **DONE** (2026-09-28) |
+| 23 | Admin: deploy | **DONE** (2026-09-28): first admin `bien` promoted by the server command |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -166,6 +171,33 @@ Interpretations taken to implement C1–C10 — **approved by the owner (2026-09
 | E7 | **Eligibility:** a new game is dealt to the connected seated players with a balance ≥ 10×S (C9, together with X6). If fewer than 2 are eligible, the start is refused. The host sets S when opening the room and may change it **between games only**. |
 | E8 | **Daily bonus** is claimed with a button, once per Vietnam calendar day (UTC+7). **Relief** is claimed with a button when the balance is **below 100**, at most once per Vietnam day. |
 | E9 | Existing accounts receive the 1,000 starting coins when the coin feature is deployed. |
+
+### Batch 8 — admin (owner, 2026-09-28)
+
+| # | Decision | Changes |
+|---|---|---|
+| AD1 | **Roles** `player` / `admin`. The first admin is created **only by a command on the server**. On the web, an admin can **"set admin"** for another user; nobody else can. | – |
+| AD2 | **Audit log** of every admin action (who, what, on whom, when, reason); append-only. | – |
+| AD3 | **Dashboard**: accounts, registrations today, open rooms, players online, games today / 7 days, coins in circulation. | – |
+| AD4 | **Users**: search; details (coins, games, wins, history, ledger); lock / unlock; rename display name; reset password. | – |
+| AD5 | **Admins may add or remove coins** for a user, with a mandatory reason, through the ledger (`admin_adjust`). | Exception to C1 |
+| AD6 | **Rooms**: list; close a room; remove a player from a room. **Closing during a game cancels the game and settles no coins.** | – |
+| AD7 | **Admins may see players' hands** in running games (admin watch view). | Exception to #17 / T14, for admins only |
+| AD8 | **Game history** with each game's coin settlements. | – |
+| AD9 | Also now: **lobby announcements**, **economy settings editable on the web** (starting coins, daily bonus, relief, relief threshold, max rooms), **login rate limiting**. | C2 values become defaults, editable by admins (P10 addressed) |
+
+Interpretations taken to implement AD1–AD9 (confirm or override):
+
+| # | Interpretation |
+|---|---|
+| F1 | An admin can also **remove** admin from another admin, but **never from themselves**, and the **last admin** cannot be removed (no lock-out). Both directions are audited. |
+| F2 | **Locking** a user: login is refused ("Tài khoản đã bị khóa"), every open page of that user is sent back to the logged-out lobby at once, and they leave every room they sit in (inside a game: removed, as after a disconnect timeout). Admins cannot lock themselves or another admin. |
+| F3 | **Reset password**: the server generates a random temporary password, shown **once** to the admin. So that players can replace it, players get a **"đổi mật khẩu"** form (current + new password). |
+| F4 | **Coin adjustments**: +/− any amount with a reason (required, 3–200 characters). A removal larger than the balance is refused (balances stay ≥ 0). Admins may adjust their own balance too; it is audited like any other adjustment. |
+| F5 | **Closing a room during a game**: chop chains **already settled** in finished rounds of that game stay (the ledger is append-only). The open chain and all game-over payments are not settled, and the game is not recorded in the leaderboard or history. Players are sent to the lobby with a message. |
+| F6 | **Admin watch view** `/quan-tri/phong/:id`: read-only, all hands visible, no seat taken. An admin who is also seated sees the normal table on `/phong/:id`. |
+| F7 | **Economy settings** are stored in the database and apply to new actions from the moment they are saved (a registration after the change gets the new starting amount, etc.). Past ledger lines never change. |
+| F8 | **Login rate limit**: after **5 failed logins** for the same username or the same IP within 15 minutes, logins from them are refused for 15 minutes ("Thử lại sau"). Counters live in memory (they reset on restart). |
 
 ### Project decisions
 
@@ -866,12 +898,59 @@ Interpretations taken to implement C1–C10 — **approved by the owner (2026-09
 - **Flaky test:** the Phase 9 timeout test used a 40 ms turn timer and could miss the countdown under load. It now uses 500 ms and a longer wait.
 - **Flakiness status (accepted by the owner, 2026-09-28):** after both fixes, a background loop of repeated full-suite runs found no further failure before it was stopped at the owner's request. The run count was not recorded exactly: several dozen runs, on top of the earlier 40 clean runs. No known flaky test remains. Any new intermittent failure should be captured with the same loop: repeat `mix test`, log the seed and the first failure.
 
+## Phases 19–23 results — admin (2026-09-28)
+
+### Delivered
+
+- **Phase 19 — roles and audit (AD1, AD2, F1):**
+  - migration `add_admin`: `users.role` (`player` / `admin`, check constraint), `users.locked_at`, `admin_actions` (audit), `settings`, `games.ref`;
+  - `TienLen.Admin`: `promote/1` (server command, audited as `promote_server`), `set_admin/3` (only admins; cannot demote yourself; cannot remove the last admin);
+  - `/quan-tri` `live_session` guarded by `on_mount(:require_admin)`; every admin function re-checks the role in the context (`authorize/1`), so a forged event from a player gets `:forbidden`;
+  - a removed admin is sent away live (`{:role_changed, role}` on `user:<id>`); the "Quản trị" header link shows for admins only.
+- **Phase 20 — users (AD4, AD5, F2–F4):**
+  - search, detail page (coins, games, recent ledger, audit);
+  - lock / unlock (F2): the locked user is logged out live (`{:force_logout}`), removed from every room, and refused at login ("Tài khoản đã bị khóa"); admins and yourself cannot be locked;
+  - rename; reset password (random temporary password shown once to the admin); the player's own "Đổi mật khẩu" in the lobby (F3);
+  - coin adjustments (F4) through `Economy.adjust/4`: ledger reason `admin_adjust`, a required reason of 3–200 characters, never below 0; the player's balance updates live and the coin history shows "Quản trị viên điều chỉnh".
+- **Phase 21 — dashboard, rooms, games (AD3, AD6–AD8, F5, F6):**
+  - dashboard: accounts, locked, admins, total coins, rooms, players online, games today;
+  - room list; watch view with **every hand** (AD7, admins only; players' projections are unchanged);
+  - close room (F5): the game is cancelled, no settlement and no stats, players are sent to the lobby with a flash;
+  - kick a player (banned from rejoining that room);
+  - game history with each game's transfers (ledger lines whose ref starts with the game's `ref`).
+- **Phase 22 — announcements, settings, rate limit (AD9, F7, F8):**
+  - announcement banner on every page, live; empty text clears it; at most 300 characters;
+  - economy settings (`starting_coins`, `daily_bonus`, `relief`, `relief_below`, `max_rooms`) in the `settings` table, cached in `:persistent_term`, loaded at start; new values apply to new actions only (F7);
+  - `TienLen.LoginThrottle` (ETS): 5 failures per username or per IP in 15 minutes block further logins ("Đăng nhập sai quá nhiều lần…"); a success clears the username counter.
+- **Phase 23 — deploy:** image rebuilt, the `add_admin` migration ran at start, `bien` promoted with `bin/tien_len rpc 'TienLen.Admin.promote("bien")'`.
+
+### VERIFIED
+
+- `mix precommit`: **339 passed (2 doctests, 337 tests)**, no warnings; 10 repeated full runs clean.
+- Tests: access for anonymous / players / admins on every page; demote rules and live redirect; lock with live logout and refused login; reset password then log in; adjustments (+250, refused −5000); rename; search; watch view shows all hands; closing a room redirects players; the 6th login refused; password change; settings validation, caching and reload; announcements live.
+- **Production** (HTTP + `rpc`, with two temporary accounts `smoke_admin` / `smoke_player`):
+  - admin pages: 200 for the admin, 302 for a player and for anonymous users; the header link only for the admin;
+  - dashboard numbers and the audit log (the two server promotions) correct;
+  - locking `smoke_player` → its login shows "Tài khoản đã bị khóa";
+  - an announcement appeared on the lobby and was cleared;
+  - 5 wrong passwords for `smoke_admin` → the 6th (correct) login refused.
+  - The two smoke accounts were deleted afterwards. Their audit rows stay, with the user ids nulled (by design).
+- Production state after the checks: `bien` (admin, 1,100) and `ai_ga` (player, 1,100, a real user) — both untouched apart from the promotion of `bien`.
+
+### Deviations and notes
+
+- **F8 on this deploy:** counting per IP is **off** (`THROTTLE_BY_IP=false` in `deploy/.env`). Behind Docker on WSL every client appears with the gateway IP, so one IP counter would lock out everyone. Counting per username is on. Turn it on when the app runs behind a proxy that passes the real client IP (and `remote_ip` is set from it). Tests also run with it off; the IP logic has its own unit test.
+- The throttle lives in ETS: it resets when the container restarts, and it is per node.
+- `last_admin` cannot be reached through the web today: removing another admin needs a second admin, and demoting yourself is refused. It stays as a safety check.
+- Admins have strong powers (see all hands, change coins); every action is written to `admin_actions` and shown on "Nhật ký".
+
 ## Environment state
 
 - Original repo: `/home/bien_nguyen/tien-len` (unmodified source). It contains one untracked file, `docs/research.md`, added during research. That file is **stale**: it is superseded by this repo's `docs/`. The owner decided to keep it.
 - Scratch copy with `node_modules` and the probe tests: the session scratchpad (temporary, not needed).
 - Toolchain: `~/.local/beam` (OTP 28, Elixir 1.20.4, `phx_new` 1.8.15), shared with `open-mu-web`.
 - Git: local repo on branch `main`, no remote (the `gh` CLI is not installed). One commit per phase.
-- Docker: compose project `tien-len` running: `tien-len` (image `tien-len:latest`, host port 4020) and `tien-len-db` (postgres:18, volume `tien-len_tien-len-db`, empty after the Phase 14 checks), both `restart: unless-stopped`. Stop with `cd deploy && docker compose down` (never `-v` unless the data should be deleted).
+- Docker: compose project `tien-len` running: `tien-len` (image `tien-len:latest`, host port 4020) and `tien-len-db` (postgres:18, volume `tien-len_tien-len-db`; accounts `bien` (admin) and `ai_ga`), both `restart: unless-stopped`. Stop with `cd deploy && docker compose down` (never `-v` unless the data should be deleted).
 - Dev/test database: container `tien-len-dev-db` on 127.0.0.1:5434 (`docker compose -f deploy/docker-compose.dev.yml up -d`), databases `tien_len_dev` and `tien_len_test`.
+- First admin: `bien` (server command). Promote more on the web ("Cấp quyền admin") or with `docker exec tien-len bin/tien_len rpc 'TienLen.Admin.promote("username")'`.
 - Owner decision: keep the stale `docs/research.md` in the original repo (do not delete it).

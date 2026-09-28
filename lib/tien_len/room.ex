@@ -39,7 +39,9 @@ defmodule TienLen.Room do
             game_players: %{},
             # coins (C3, E7): stake S of this room; games started so far (settlement keys)
             stake: 0,
-            game_no: 0
+            game_no: 0,
+            # player ids removed by an admin: they cannot join this room again (AD6)
+            banned: MapSet.new()
 
   @type player_id :: term()
   @type seat :: 0..3
@@ -94,6 +96,7 @@ defmodule TienLen.Room do
     case seat_of(room, player_id) do
       nil ->
         cond do
+          MapSet.member?(room.banned, player_id) -> {:error, :kicked}
           room.status == :playing -> {:error, :game_in_progress}
           map_size(room.seats) >= @max_seats -> {:error, :room_full}
           true -> seat_new_player(room, player_id, name)
@@ -124,6 +127,26 @@ defmodule TienLen.Room do
       {room, host_events} = transfer_host_if(room, seat)
       {:ok, room, events ++ [{:left, seat}] ++ host_events}
     end
+  end
+
+  @doc """
+  An admin removes a player (AD6): like leaving (removed from a running game, seat freed, host
+  passed on), and they cannot join this room again.
+  """
+  @spec kick(t(), player_id()) :: result()
+  def kick(room, player_id) do
+    with {:ok, seat} <- fetch_seat(room, player_id),
+         {:ok, room, events} <- leave(room, player_id) do
+      {:ok, %{room | banned: MapSet.put(room.banned, player_id)}, [{:kicked, seat} | events]}
+    end
+  end
+
+  @doc "The admin watch view (AD7, F6): public room info and the whole game."
+  def admin_view(room) do
+    room
+    |> view(nil)
+    |> Map.put(:game, room.game && Game.admin_view(room.game))
+    |> Map.put(:seat_players, Map.new(room.seats, fn {seat, p} -> {seat, p.player_id} end))
   end
 
   @doc "Marks a seated player as disconnected (their seat is kept)."
@@ -287,6 +310,7 @@ defmodule TienLen.Room do
 
     %{
       room_id: room.id,
+      ref: "room:#{room.id}:game:#{room.game_no}",
       player_count: length(game.seats),
       instant_win: Game.instant_win?(game),
       players: players

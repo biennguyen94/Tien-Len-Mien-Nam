@@ -23,7 +23,8 @@ defmodule TienLenWeb.UserAuth do
 
   @doc "Plug: assigns `:current_user` from the session (or `nil`)."
   def fetch_current_user(conn, _opts) do
-    user = conn |> get_session("user_id") |> Accounts.get_user()
+    # a locked account's session counts as logged out (F2)
+    user = conn |> get_session("user_id") |> Accounts.get_active_user()
     assign(conn, :current_user, user)
   end
 
@@ -55,7 +56,23 @@ defmodule TienLenWeb.UserAuth do
 
   def on_mount(:mount_current_user, _params, session, socket) do
     allow_ecto_sandbox(socket)
-    {:cont, socket |> mount_current_user(session) |> track_coins()}
+    {:cont, socket |> mount_current_user(session) |> common()}
+  end
+
+  # AD1: admin pages. The role is read from the database at mount; every admin action is
+  # re-authorized by TienLen.Admin as well, and a role change sends the page away at once.
+  def on_mount(:require_admin, _params, session, socket) do
+    allow_ecto_sandbox(socket)
+    socket = mount_current_user(socket, session)
+
+    if TienLen.Accounts.User.admin?(socket.assigns.current_user) do
+      {:cont, socket |> Phoenix.Component.assign(:admin_area, true) |> common()}
+    else
+      {:halt,
+       socket
+       |> Phoenix.LiveView.put_flash(:error, "Chỉ quản trị viên mới vào được trang này")
+       |> Phoenix.LiveView.redirect(to: ~p"/")}
+    end
   end
 
   def on_mount(:require_user, _params, session, socket) do
@@ -74,15 +91,79 @@ defmodule TienLenWeb.UserAuth do
          socket
          |> Phoenix.Component.assign(:player_id, user.id)
          |> Phoenix.Component.assign(:player_name, user.display_name)
-         |> track_coins()}
+         |> common()}
     end
   end
 
   defp mount_current_user(socket, session) do
     Phoenix.Component.assign_new(socket, :current_user, fn ->
-      Accounts.get_user(session["user_id"])
+      Accounts.get_active_user(session["user_id"])
     end)
   end
+
+  # Shared by every page: the announcement banner (AD9), live account events (F2, F1) and the
+  # header balance.
+  defp common(socket) do
+    socket
+    |> Phoenix.Component.assign(:announcement, TienLen.Settings.announcement())
+    |> Phoenix.Component.assign_new(:admin_area, fn -> false end)
+    |> track_announcement()
+    |> track_account()
+    |> track_coins()
+  end
+
+  defp track_announcement(socket) do
+    if Phoenix.LiveView.connected?(socket) do
+      TienLen.Settings.subscribe()
+
+      Phoenix.LiveView.attach_hook(socket, :announcement, :handle_info, fn
+        {:settings_changed, "announcement", text}, socket ->
+          {:halt, Phoenix.Component.assign(socket, :announcement, text)}
+
+        {:settings_changed, _key, _value}, socket ->
+          {:halt, socket}
+
+        _other, socket ->
+          {:cont, socket}
+      end)
+    else
+      socket
+    end
+  end
+
+  # F2: a locked account is sent to the (logged-out) lobby at once; F1: losing the admin role
+  # sends admin pages away.
+  defp track_account(%{assigns: %{current_user: %{id: id}}} = socket) do
+    if Phoenix.LiveView.connected?(socket) do
+      Phoenix.PubSub.subscribe(TienLen.PubSub, TienLen.Admin.user_topic(id))
+
+      Phoenix.LiveView.attach_hook(socket, :account, :handle_info, fn
+        {:force_logout}, socket ->
+          {:halt,
+           socket
+           |> Phoenix.LiveView.put_flash(:error, "Tài khoản đã bị khóa")
+           |> Phoenix.LiveView.redirect(to: ~p"/")}
+
+        {:role_changed, role}, socket ->
+          socket =
+            Phoenix.Component.assign(socket, :current_user, %{
+              socket.assigns.current_user
+              | role: role
+            })
+
+          if socket.assigns.admin_area and role != "admin",
+            do: {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/")},
+            else: {:halt, socket}
+
+        _other, socket ->
+          {:cont, socket}
+      end)
+    else
+      socket
+    end
+  end
+
+  defp track_account(socket), do: socket
 
   # Keeps `@current_user.coins` (shown in the header) up to date on every page.
   defp track_coins(%{assigns: %{current_user: %{id: id}}} = socket) do

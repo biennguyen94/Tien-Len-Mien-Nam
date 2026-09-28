@@ -24,6 +24,7 @@ defmodule TienLenWeb.LobbyLive do
      |> assign(:page_title, "Sảnh")
      |> assign(:rooms, if(user, do: Lobby.list_rooms(), else: []))
      |> assign(:editing_name, false)
+     |> assign(:changing_password, false)
      |> assign(:trigger_submit, false)
      |> assign_register_form(Accounts.change_registration())
      |> assign(:login_form, to_form(%{"username" => login_username}, as: "user", id: "login"))
@@ -106,6 +107,33 @@ defmodule TienLenWeb.LobbyLive do
     end
   end
 
+  # F3: players replace a temporary password (or any password) themselves.
+  def handle_event("toggle_password", _params, socket),
+    do: {:noreply, assign(socket, :changing_password, !socket.assigns.changing_password)}
+
+  def handle_event(
+        "change_password",
+        %{"current" => current, "new" => new},
+        %{assigns: %{current_user: %{} = user}} = socket
+      ) do
+    case Accounts.change_password(user, current, new) do
+      {:ok, _user} ->
+        {:noreply,
+         socket |> assign(:changing_password, false) |> put_flash(:info, "Đã đổi mật khẩu")}
+
+      {:error, :wrong_password} ->
+        {:noreply, put_flash(socket, :error, Text.reason(:wrong_password))}
+
+      {:error, %Ecto.Changeset{} = cs} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           cs.errors |> Keyword.values() |> Enum.map_join(", ", &elem(&1, 0))
+         )}
+    end
+  end
+
   def handle_event("edit_name", _params, socket),
     do: {:noreply, assign(socket, :editing_name, true)}
 
@@ -144,7 +172,7 @@ defmodule TienLenWeb.LobbyLive do
   @impl true
   def render(%{current_user: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
       <div class="grid gap-4 md:grid-cols-2">
         <section id="register" class="card bg-base-200 p-6">
           <h1 class="text-xl font-bold mb-3">Đăng ký</h1>
@@ -216,7 +244,7 @@ defmodule TienLenWeb.LobbyLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
       <section :if={@editing_name} id="name-form" class="card bg-base-200 p-4">
         <.form
           for={@name_form}
@@ -245,6 +273,36 @@ defmodule TienLenWeb.LobbyLive do
             </button>
           </p>
         </div>
+
+        <div class="text-sm">
+          <button id="toggle-password" phx-click="toggle_password" class="btn btn-ghost btn-xs">
+            đổi mật khẩu
+          </button>
+        </div>
+        <form
+          :if={@changing_password}
+          id="password-form"
+          phx-submit="change_password"
+          class="card bg-base-200 p-4 flex flex-wrap items-end gap-2"
+        >
+          <input
+            type="password"
+            name="current"
+            placeholder="Mật khẩu hiện tại"
+            autocomplete="current-password"
+            class="input input-bordered input-sm"
+            required
+          />
+          <input
+            type="password"
+            name="new"
+            placeholder="Mật khẩu mới (8–72)"
+            autocomplete="new-password"
+            class="input input-bordered input-sm"
+            required
+          />
+          <button class="btn btn-sm btn-primary">Đổi mật khẩu</button>
+        </form>
 
         <div id="coins" class="card bg-base-200 p-4 flex flex-row flex-wrap items-center gap-3">
           <span class="text-lg">🪙 <strong id="balance">{Text.coins(@current_user.coins)}</strong> coin</span>

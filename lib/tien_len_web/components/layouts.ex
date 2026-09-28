@@ -35,6 +35,7 @@ defmodule TienLenWeb.Layouts do
 
   attr :wide, :boolean, default: false, doc: "use the full width (game table)"
   attr :current_user, :any, default: nil, doc: "the logged-in user, if any"
+  attr :announcement, :string, default: nil, doc: "lobby announcement (AD9)"
 
   def app(assigns) do
     ~H"""
@@ -45,6 +46,14 @@ defmodule TienLenWeb.Layouts do
         </.link>
       </div>
       <div class="flex-none flex items-center gap-2">
+        <.link
+          :if={@current_user && @current_user.role == "admin"}
+          navigate={~p"/quan-tri"}
+          id="admin-link"
+          class="btn btn-ghost btn-sm text-error"
+        >
+          Quản trị
+        </.link>
         <.link :if={@current_user} navigate={~p"/bang-xep-hang"} class="btn btn-ghost btn-sm">
           Bảng xếp hạng
         </.link>
@@ -76,6 +85,10 @@ defmodule TienLenWeb.Layouts do
         <.theme_toggle />
       </div>
     </header>
+
+    <div :if={@announcement} id="announcement" class="alert alert-info rounded-none justify-center">
+      📢 {@announcement}
+    </div>
 
     <main class="px-3 py-6 sm:px-6 lg:px-8">
       <div class={["mx-auto space-y-4", if(@wide, do: "max-w-5xl", else: "max-w-2xl")]}>

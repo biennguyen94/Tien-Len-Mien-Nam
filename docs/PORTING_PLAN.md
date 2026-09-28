@@ -152,3 +152,28 @@ Tien-Len-Mien-Nam/
 
 - [x] Migrations on the containers (existing accounts get 1,000, E9); smoke test; DEPLOY.md.
 
+## Phase 19 — Admin: roles, guard, audit log, set admin (AD1, AD2, F1) — DONE (2026-09-28)
+
+- [x] `users.role`; `admin_actions` audit table; `TienLen.Admin` context; release command `TienLen.Admin.promote/1`.
+- [x] `/quan-tri` live_session guarded by `:require_admin` (every mount and event); set / remove admin on the web (F1).
+- Tests: non-admins cannot reach any admin page or event; promote / demote rules; audit rows.
+
+## Phase 20 — Admin: users (AD4, AD5, F2–F4) — DONE (2026-09-28)
+
+- [x] Search and user detail page; lock / unlock (session kill, room removal); rename; reset password (temporary, shown once) and the player's "đổi mật khẩu"; coin adjustments through `Economy`.
+- Tests: locked users cannot log in and are kicked live; password reset + change; adjustments in the ledger, no negative balances; everything audited.
+
+## Phase 21 — Admin: dashboard, rooms, game history (AD3, AD6–AD8, F5, F6) — DONE (2026-09-28)
+
+- [x] Dashboard numbers; room list; watch view with all hands; close room (cancel game, F5); remove a player; game history with settlements.
+- Tests: counts; watch view only for admins; closing a room mid-game settles nothing and records nothing; kick.
+
+## Phase 22 — Admin: announcements, settings, rate limit (AD9, F7, F8) — DONE (2026-09-28)
+
+- [x] Lobby announcement banner (live); economy settings table + admin form used by `Economy`; login rate limiting.
+- Tests: announcements appear live; new values apply; old ledger unchanged; the 6th failed login is refused.
+
+## Phase 23 — Admin: deploy — DONE (2026-09-28)
+
+- [x] Migrations on the containers; promote the first admin with the server command; smoke test; DEPLOY.md.
+
