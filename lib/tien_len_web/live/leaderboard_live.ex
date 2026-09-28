@@ -108,26 +108,29 @@ defmodule TienLenWeb.LeaderboardLive do
         </.link>
       </div>
 
-      <table :if={@tab == :richest} id="richest" class="table table-zebra">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Người chơi</th>
-            <th class="text-right">Coin</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            :for={row <- @richest}
-            id={"rich-#{row.user_id}"}
-            class={row.user_id == @current_user.id && "font-bold bg-primary/10"}
-          >
-            <td>{row.rank}</td>
-            <td><.player_link row={row} /></td>
-            <td class="text-right tabular-nums">🪙 {Text.coins(row.coins)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <%!-- M3: a wide table scrolls inside its box on phones, never the page --%>
+      <div :if={@tab == :richest} class="overflow-x-auto">
+        <table id="richest" class="table table-zebra table-sm sm:table-md">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Người chơi</th>
+              <th class="text-right">Coin</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={row <- @richest}
+              id={"rich-#{row.user_id}"}
+              class={row.user_id == @current_user.id && "font-bold bg-primary/10"}
+            >
+              <td>{row.rank}</td>
+              <td><.player_link row={row} /></td>
+              <td class="text-right tabular-nums">🪙 {Text.coins(row.coins)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div
         :if={@tab in [:week, :last_week]}
@@ -167,30 +170,33 @@ defmodule TienLenWeb.LeaderboardLive do
 
         <p :if={@rows == []} id="no-rows" class="text-base-content/70">Chưa có ván nào được ghi.</p>
 
-        <table :if={@rows != []} id="leaderboard" class="table table-zebra">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Người chơi</th>
-              <th class="text-right">Về nhất</th>
-              <th class="text-right">Số ván</th>
-              <th class="text-right">Tỉ lệ</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              :for={row <- @rows}
-              id={"row-#{row.user_id}"}
-              class={row.user_id == @current_user.id && "font-bold bg-primary/10"}
-            >
-              <td>{row.rank}</td>
-              <td><.player_link row={row} /></td>
-              <td class="text-right tabular-nums">{row.wins}</td>
-              <td class="text-right tabular-nums">{row.games}</td>
-              <td class="text-right tabular-nums">{percent(row.win_rate)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <%!-- M3: a wide table scrolls inside its box on phones, never the page --%>
+        <div :if={@rows != []} class="overflow-x-auto">
+          <table id="leaderboard" class="table table-zebra table-sm sm:table-md">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Người chơi</th>
+                <th class="text-right">Về nhất</th>
+                <th class="text-right hidden sm:table-cell">Số ván</th>
+                <th class="text-right">Tỉ lệ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={row <- @rows}
+                id={"row-#{row.user_id}"}
+                class={row.user_id == @current_user.id && "font-bold bg-primary/10"}
+              >
+                <td>{row.rank}</td>
+                <td><.player_link row={row} /></td>
+                <td class="text-right tabular-nums">{row.wins}</td>
+                <td class="text-right tabular-nums hidden sm:table-cell">{row.games}</td>
+                <td class="text-right tabular-nums">{percent(row.win_rate)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </Layouts.app>
     """
@@ -203,7 +209,7 @@ defmodule TienLenWeb.LeaderboardLive do
     <.link navigate={~p"/nguoi-choi/#{@row.username}"} class="link link-hover">
       {Text.avatar(@row[:avatar])} {@row.display_name}
     </.link>
-    <span class="text-xs text-base-content/60">@{@row.username}</span>
+    <span class="text-xs text-base-content/60 block sm:inline">@{@row.username}</span>
     """
   end
 end

@@ -42,6 +42,7 @@ Last updated: 2026-09-28
 | 36 | Emoji reactions; deploy | **DONE** (2026-09-28) |
 | 37 | Spectators | **DONE** (2026-09-28) |
 | 38 | Replays; deploy | **DONE** (2026-09-28) |
+| 39 | Phone layout, part 2 (header menu, all pages) | **DONE** (2026-09-28) |
 
 Current architecture (modules, processes, database, routes, visibility): `ARCHITECTURE.md` Part 2. What was delivered and verified in each phase: the results sections below.
 
@@ -294,6 +295,14 @@ The owner asked for #4–#8 "theo cách bạn thấy hợp lý nhất" without b
 | V4 | (Claude) At most **20 spectators** per room. Players see the count (👀). A player seated in the room is sent to the table. Private rooms can be watched by anyone with the link. | – |
 | V5 | (Claude) The replay is the dealt hands plus the public events. It is built while the game runs but **stored only with the recorded result at game over**. Games with bots (not recorded) and games recorded before this change have no replay. | – |
 | V6 | (Claude) A replay can be opened by the **players of that game and admins**, from "Lịch sử" (and the admin "Ván" page). Controls: first, previous, next, last, auto-play, jump to any step. | – |
+
+### Batch 13 — phone layout, part 2 (owner, 2026-09-28)
+
+The owner reported that the site was fine on a laptop but not on phones (360–412 px) and gave a spec. Answers to Claude's questions: ☰ menu, headless Chromium for checking, all pages.
+
+| # | Decision |
+|---|---|
+| M3 | **No horizontal scroll at 360 / 390 / 412 px on any page**, laptop unchanged. Tailwind mobile-first classes with `sm:` (≥ 640 px) for the laptop layout, no custom CSS, no `overflow-x: hidden` on `body`. Details:<br>• the header on phones is the title, the coin badge and a **☰ menu** (all links, profile, logout, theme); the friend-request count is a dot on ☰;<br>• the lobby greeting and account links are one wrapping row;<br>• mission rewards never break; the progress bar goes under the title on phones;<br>• the create-room form is stacked on phones (input and button full width, note below);<br>• room rows wrap;<br>• the table shows the 3 opponents in one row above a full-width centre;<br>• wide tables scroll inside their own box (admin); the player-facing leaderboard fits by hiding "Số ván" on phones;<br>• the 💬 button sits in the screen corner with page bottom padding, and on the table it is icon-only and above the action bar. |
 
 ### Project decisions
 
@@ -1208,6 +1217,37 @@ The owner asked for #4–#8 "theo cách bạn thấy hợp lý nhất" without b
 ### NOT VERIFIED
 
 - The spectator and replay pages on a real phone.
+
+## Phase 39 results — phone layout, part 2 (2026-09-28)
+
+### Root cause
+
+The header's right-hand block had `flex-none`: it never shrank, so it was always as wide as all its buttons on one line (816 px). The page grew to 816 px and everything looked squeezed into the left half. The `flex-wrap` added in Phase 31 could not help.
+
+### Delivered
+
+- `Layouts.app`:
+  - phones get the title, `#my-coins-mobile` and `#nav-menu-toggle` (`JS.toggle_class("hidden flex")`, `aria-expanded`); `#site-nav` holds the same links (one set of ids), shown from `sm` up;
+  - `main` has `pb-24` on phones;
+  - new attribute `action_bar` lifts the 💬 button (`bottom-24`, icon only) on the table.
+- Lobby: account row, missions, stacked create-room form, wrapping room rows, `min-w-0` chat inputs.
+- Table and spectator page: phone grid (opponents row, full-width centre); seats fill their column.
+- Every `<table>` is wrapped in `overflow-x-auto`. Player tables use `table-sm` on phones. The leaderboard hides "Số ván" on phones and puts the username under the name.
+- `tools/mobile-audit/` (Playwright, dev tool): logs in, visits every page (plus the menu open, a table with bots while playing, a spectator), measures page overflow and inner scroll boxes at 360/390/412/1280 and saves screenshots.
+
+### VERIFIED
+
+- **Before:** 57 of 80 page/width checks overflowed on phones; every logged-in page was 816 px wide. After fixing the header, tables overflowed as well: leaderboard 422 px, coin history 388 px, admin tables up to 620 px.
+- **After: 83/83 checks OK** (no page wider than the screen at 360, 390, 412 and 1280 px). Only the admin tables (users, rooms, audit) scroll inside their own box.
+- Screenshots reviewed: lobby, open menu, table while playing, spectator, profile, leaderboard, friends, coin history, admin user page.
+  - Laptop (1280 px): the header and the table look as before. The lobby greeting row is now tidier.
+  - Table on phones: the 💬 button (bottom 96 px) clears the action bar (up to 87 px tall at 360 px).
+- `mix precommit`: 413 passed. `mobile_layout_test.exs` (3 tests) checks the ☰ markup, the logged-out nav and the 💬 placement.
+- Production: redeployed; the logged-out lobby has no overflow at 360/390/412; no errors in the log.
+
+### NOT VERIFIED
+
+- A real phone (iOS Safari / Android Chrome). Headless Chromium lacks emoji fonts, so the emoji show as boxes in the screenshots; that is not a bug.
 
 ## Environment state
 

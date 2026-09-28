@@ -44,27 +44,30 @@ defmodule TienLenWeb.Admin.UsersLive do
         />
         <button class="btn">Tìm</button>
       </form>
-      <table id="users" class="table table-zebra">
-        <thead>
-          <tr>
-            <th>Tài khoản</th><th>Tên</th><th class="text-right">Coin</th><th>Vai trò</th><th>
-              Trạng thái
-            </th><th>Tạo lúc</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :for={u <- @users} id={"user-#{u.id}"}>
-            <td>
-              <.link navigate={~p"/quan-tri/nguoi-choi/#{u.id}"} class="link">@{u.username}</.link>
-            </td>
-            <td>{u.display_name}</td>
-            <td class="text-right tabular-nums">{Text.coins(u.coins)}</td>
-            <td><span :if={u.role == "admin"} class="badge badge-error">admin</span></td>
-            <td><span :if={u.locked_at} class="badge badge-warning">bị khóa</span></td>
-            <td class="text-sm">{vn_time(u.inserted_at)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <%!-- M3: a wide table scrolls inside its box on phones, never the page --%>
+      <div class="overflow-x-auto">
+        <table id="users" class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Tài khoản</th><th>Tên</th><th class="text-right">Coin</th><th>Vai trò</th><th>
+                Trạng thái
+              </th><th>Tạo lúc</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={u <- @users} id={"user-#{u.id}"}>
+              <td>
+                <.link navigate={~p"/quan-tri/nguoi-choi/#{u.id}"} class="link">@{u.username}</.link>
+              </td>
+              <td>{u.display_name}</td>
+              <td class="text-right tabular-nums">{Text.coins(u.coins)}</td>
+              <td><span :if={u.role == "admin"} class="badge badge-error">admin</span></td>
+              <td><span :if={u.locked_at} class="badge badge-warning">bị khóa</span></td>
+              <td class="text-sm">{vn_time(u.inserted_at)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </Layouts.app>
     """
   end

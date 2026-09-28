@@ -107,6 +107,10 @@ docker compose ps                                                               
 
 ## Verification
 
+### Phase 39 (2026-09-28), phone layout
+
+- Redeployed (no migration). The logged-out lobby had no horizontal overflow at 360/390/412 px. The full audit (every page, logged in) was run on the dev server with `tools/mobile-audit`: 83/83 OK.
+
 ### Phases 37–38 (2026-09-28), spectators and replays
 
 - The `add_game_replay` migration ran at start. Via `rpc`: a spectator got no hands; a fixed 2-player game was recorded with a replay (8 steps). The test game and accounts were deleted.

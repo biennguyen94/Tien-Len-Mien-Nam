@@ -38,73 +38,121 @@ defmodule TienLenWeb.Layouts do
   attr :announcement, :string, default: nil, doc: "lobby announcement (AD9)"
   attr :social, :map, default: nil, doc: "private chat panel and invite popup (G7, G8)"
 
+  attr :action_bar, :boolean,
+    default: false,
+    doc: "the page has a sticky bar at the bottom on phones (table): lift the 💬 button"
+
   def app(assigns) do
     ~H"""
-    <header class="navbar flex-wrap gap-y-1 px-2 sm:px-6 lg:px-8 border-b border-base-300">
-      <div class="flex-1">
-        <.link navigate={~p"/"} class="text-lg font-bold tracking-tight">
+    <%!-- M3: on phones (< 640px, Tailwind `sm`) the nav collapses behind a ☰ button; from
+         `sm` up it is the single row it always was. The coin badge stays visible on phones. --%>
+    <header class="border-b border-base-300">
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 sm:px-6 lg:px-8 min-h-16">
+        <.link navigate={~p"/"} class="flex-1 min-w-0 truncate text-lg font-bold tracking-tight">
           ♠ Tiến Lên Miền Nam
-        </.link>
-      </div>
-      <div class="flex-none flex flex-wrap items-center gap-1 sm:gap-2">
-        <.link
-          :if={@current_user && @current_user.role == "admin"}
-          navigate={~p"/quan-tri"}
-          id="admin-link"
-          class="btn btn-ghost btn-sm text-error"
-        >
-          Quản trị
-        </.link>
-        <.link :if={@current_user} navigate={~p"/bang-xep-hang"} class="btn btn-ghost btn-sm">
-          Bảng xếp hạng
-        </.link>
-        <.link :if={@current_user} navigate={~p"/lich-su"} class="btn btn-ghost btn-sm">
-          Lịch sử
-        </.link>
-        <.link
-          :if={@current_user}
-          navigate={~p"/ban-be"}
-          id="friends-link"
-          class="btn btn-ghost btn-sm"
-        >
-          Bạn bè
-          <span
-            :if={@social && @social.requests > 0}
-            id="friend-requests"
-            class="badge badge-error badge-sm"
-          >
-            {@social.requests}
-          </span>
         </.link>
         <.link
           :if={@current_user}
           navigate={~p"/lich-su-coin"}
-          id="my-coins"
-          class="badge badge-warning badge-lg tabular-nums"
+          id="my-coins-mobile"
+          class="badge badge-warning tabular-nums sm:hidden"
           title="Lịch sử coin"
         >
           🪙 {TienLenWeb.Text.coins(@current_user.coins)}
         </.link>
-        <.link
+        <button
           :if={@current_user}
-          navigate={~p"/nguoi-choi/#{@current_user.username}"}
-          id="current-user"
-          class="text-sm link link-hover"
-          title="Hồ sơ của bạn"
+          id="nav-menu-toggle"
+          type="button"
+          class="btn btn-ghost btn-sm btn-square relative sm:hidden"
+          aria-label="Menu"
+          aria-controls="site-nav"
+          aria-expanded="false"
+          phx-click={
+            JS.toggle_class("hidden flex", to: "#site-nav")
+            |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+          }
         >
-          {TienLenWeb.Text.avatar(@current_user)} {@current_user.display_name}
-          <span class="text-base-content/60">(@{@current_user.username})</span>
-        </.link>
-        <.link
-          :if={@current_user}
-          id="logout"
-          href={~p"/dang-xuat"}
-          method="delete"
-          class="btn btn-ghost btn-sm"
+          <.icon name="hero-bars-3" class="size-6" />
+          <span
+            :if={@social && @social.requests > 0}
+            class="absolute top-0 right-0 size-2.5 rounded-full bg-error"
+          />
+        </button>
+        <nav
+          id="site-nav"
+          class={[
+            "w-full sm:w-auto flex-col items-stretch sm:flex-row sm:flex sm:flex-wrap sm:items-center gap-1 sm:gap-2 py-1 sm:py-0",
+            if(@current_user, do: "hidden", else: "flex")
+          ]}
         >
-          Đăng xuất
-        </.link>
-        <.theme_toggle />
+          <.link
+            :if={@current_user && @current_user.role == "admin"}
+            navigate={~p"/quan-tri"}
+            id="admin-link"
+            class="btn btn-ghost btn-sm justify-start sm:justify-center text-error"
+          >
+            Quản trị
+          </.link>
+          <.link
+            :if={@current_user}
+            navigate={~p"/bang-xep-hang"}
+            class="btn btn-ghost btn-sm justify-start sm:justify-center"
+          >
+            Bảng xếp hạng
+          </.link>
+          <.link
+            :if={@current_user}
+            navigate={~p"/lich-su"}
+            class="btn btn-ghost btn-sm justify-start sm:justify-center"
+          >
+            Lịch sử
+          </.link>
+          <.link
+            :if={@current_user}
+            navigate={~p"/ban-be"}
+            id="friends-link"
+            class="btn btn-ghost btn-sm justify-start sm:justify-center"
+          >
+            Bạn bè
+            <span
+              :if={@social && @social.requests > 0}
+              id="friend-requests"
+              class="badge badge-error badge-sm"
+            >
+              {@social.requests}
+            </span>
+          </.link>
+          <.link
+            :if={@current_user}
+            navigate={~p"/lich-su-coin"}
+            id="my-coins"
+            class="badge badge-warning badge-lg tabular-nums hidden sm:inline-flex"
+            title="Lịch sử coin"
+          >
+            🪙 {TienLenWeb.Text.coins(@current_user.coins)}
+          </.link>
+          <.link
+            :if={@current_user}
+            navigate={~p"/nguoi-choi/#{@current_user.username}"}
+            id="current-user"
+            class="text-sm link link-hover px-3 py-1 sm:p-0 truncate"
+            title="Hồ sơ của bạn"
+          >
+            {TienLenWeb.Text.avatar(@current_user)} {@current_user.display_name}
+            <span class="text-base-content/60">(@{@current_user.username})</span>
+          </.link>
+          <.link
+            :if={@current_user}
+            id="logout"
+            href={~p"/dang-xuat"}
+            method="delete"
+            class="btn btn-ghost btn-sm justify-start sm:justify-center"
+          >
+            Đăng xuất
+          </.link>
+          <div class="px-3 py-1 sm:p-0 w-fit"><.theme_toggle /></div>
+        </nav>
       </div>
     </header>
 
@@ -112,13 +160,14 @@ defmodule TienLenWeb.Layouts do
       📢 {@announcement}
     </div>
 
-    <main class="px-3 py-6 sm:px-6 lg:px-8">
+    <%!-- M3: bottom padding on phones so the 💬 button never covers the last inputs --%>
+    <main class="px-3 pt-6 pb-24 sm:px-6 sm:pb-6 lg:px-8">
       <div class={["mx-auto space-y-4", if(@wide, do: "max-w-5xl", else: "max-w-2xl")]}>
         {render_slot(@inner_block)}
       </div>
     </main>
 
-    <TienLenWeb.Social.panel :if={@social} social={@social} />
+    <TienLenWeb.Social.panel :if={@social} social={@social} raised={@action_bar} />
     <.flash_group flash={@flash} />
     """
   end

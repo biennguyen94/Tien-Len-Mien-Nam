@@ -220,6 +220,7 @@ defmodule TienLenWeb.Social do
   # -- rendering --------------------------------------------------------------------
 
   attr :social, :map, required: true
+  attr :raised, :boolean, default: false, doc: "phones: sit above the table's action bar"
 
   def panel(assigns) do
     assigns = assign(assigns, :unread, Enum.sum_by(assigns.social.convs, & &1.unread))
@@ -228,7 +229,7 @@ defmodule TienLenWeb.Social do
     <div
       :if={@social.invite}
       id="invite-popup"
-      class="fixed top-20 left-1/2 -translate-x-1/2 z-50 card bg-base-100 shadow-xl border border-primary p-4 space-y-2 w-80"
+      class="fixed top-20 left-1/2 -translate-x-1/2 z-50 card bg-base-100 shadow-xl border border-primary p-4 space-y-2 w-80 max-w-[calc(100vw-1.5rem)]"
     >
       <p>
         <strong>{@social.invite.from_name}</strong>
@@ -262,12 +263,18 @@ defmodule TienLenWeb.Social do
 
     <div
       id="social"
-      class="fixed bottom-20 sm:bottom-4 right-2 sm:right-4 z-40 flex flex-col items-end gap-2"
+      class={
+        [
+          "fixed right-3 sm:right-4 sm:bottom-4 z-40 flex flex-col items-end gap-2",
+          # the table's sticky action bar is up to ~90 px tall on phones
+          if(@raised, do: "bottom-24", else: "bottom-3")
+        ]
+      }
     >
       <div
         :if={@social.open}
         id="social-panel"
-        class="card bg-base-100 shadow-xl border w-80 p-3 space-y-2"
+        class="card bg-base-100 shadow-xl border w-80 max-w-[calc(100vw-1.5rem)] p-3 space-y-2"
       >
         <div :if={@social.peer == nil} class="tabs tabs-box tabs-sm">
           <button
@@ -313,7 +320,7 @@ defmodule TienLenWeb.Social do
                 maxlength="200"
                 autocomplete="off"
                 placeholder="Nhắn riêng…"
-                class="input input-bordered input-sm flex-1"
+                class="input input-bordered input-sm flex-1 min-w-0"
               />
               <button class="btn btn-sm btn-primary">Gửi</button>
             </form>
@@ -353,8 +360,13 @@ defmodule TienLenWeb.Social do
         <% end %>
       </div>
 
-      <button id="social-toggle" phx-click="social:toggle" class="btn btn-primary btn-sm shadow">
-        💬 Tin nhắn
+      <button
+        id="social-toggle"
+        phx-click="social:toggle"
+        class="btn btn-primary btn-sm shadow"
+        aria-label="Tin nhắn"
+      >
+        💬 <span class={@raised && "hidden sm:inline"}>Tin nhắn</span>
         <span :if={@unread > 0} id="social-unread" class="badge badge-error badge-sm">{@unread}</span>
       </button>
     </div>

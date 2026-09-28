@@ -245,3 +245,8 @@ Tien-Len-Mien-Nam/
 ## Phase 38 — Replays; deploy (V2, V5, V6) — DONE (2026-09-28)
 
 - [x] `games.replay`, replay capture in the room server, `TienLen.Replay`, `/van/:id`, links from history / admin.
+
+
+## Phase 39 — Phone layout, part 2 (M3) — DONE (2026-09-28)
+
+- [x] ☰ header, lobby / table / spectator phone layouts, tables in scroll boxes, 💬 placement; `tools/mobile-audit` shows 83/83 OK.

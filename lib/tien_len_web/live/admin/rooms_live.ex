@@ -41,34 +41,37 @@ defmodule TienLenWeb.Admin.RoomsLive do
       <h1 class="text-xl font-bold">Phòng đang mở</h1>
       <.admin_nav active={:rooms} />
       <p :if={@rooms == []} class="text-base-content/70">Không có phòng nào.</p>
-      <table :if={@rooms != []} id="admin-rooms" class="table table-zebra">
-        <thead>
-          <tr>
-            <th>Mã</th><th>Chủ phòng</th><th>Người</th><th>Cược</th><th>Trạng thái</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :for={r <- @rooms} id={"aroom-#{r.id}"}>
-            <td class="font-mono">{r.id}</td>
-            <td>{r.host_name || "—"}</td>
-            <td>{r.players}/{r.max_players}</td>
-            <td>
-              {if r.stake == 0, do: "Chơi vui", else: Text.coins(r.stake)}
-              <span :if={r.private} class="badge badge-info badge-xs">riêng tư</span>
-            </td>
-            <td>{if r.status == :playing, do: "Đang chơi", else: "Đang chờ"}</td>
-            <td class="flex gap-2">
-              <.link navigate={~p"/quan-tri/phong/#{r.id}"} class="btn btn-xs">Xem</.link>
-              <button
-                phx-click="close"
-                phx-value-id={r.id}
-                class="btn btn-xs btn-error"
-                data-confirm="Đóng phòng? Ván đang chơi sẽ bị hủy, không tính coin."
-              >Đóng</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <%!-- M3: a wide table scrolls inside its box on phones, never the page --%>
+      <div :if={@rooms != []} class="overflow-x-auto">
+        <table id="admin-rooms" class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Mã</th><th>Chủ phòng</th><th>Người</th><th>Cược</th><th>Trạng thái</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={r <- @rooms} id={"aroom-#{r.id}"}>
+              <td class="font-mono">{r.id}</td>
+              <td>{r.host_name || "—"}</td>
+              <td>{r.players}/{r.max_players}</td>
+              <td>
+                {if r.stake == 0, do: "Chơi vui", else: Text.coins(r.stake)}
+                <span :if={r.private} class="badge badge-info badge-xs">riêng tư</span>
+              </td>
+              <td>{if r.status == :playing, do: "Đang chơi", else: "Đang chờ"}</td>
+              <td class="flex gap-2">
+                <.link navigate={~p"/quan-tri/phong/#{r.id}"} class="btn btn-xs">Xem</.link>
+                <button
+                  phx-click="close"
+                  phx-value-id={r.id}
+                  class="btn btn-xs btn-error"
+                  data-confirm="Đóng phòng? Ván đang chơi sẽ bị hủy, không tính coin."
+                >Đóng</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </Layouts.app>
     """
   end

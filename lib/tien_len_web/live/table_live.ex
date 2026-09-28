@@ -364,6 +364,7 @@ defmodule TienLenWeb.TableLive do
       announcement={@announcement}
       social={@social}
       wide
+      action_bar
     >
       <div class="flex flex-wrap items-center justify-between gap-2">
         <p>
@@ -404,20 +405,25 @@ defmodule TienLenWeb.TableLive do
         </div>
       </div>
 
-      <div id="table" class="grid grid-cols-3 grid-rows-[auto_1fr_auto] gap-3 items-center">
-        <div class="col-start-2 row-start-1 justify-self-center">
+      <%!-- M3: phones put the three opponents in one row (left, top, right) above a full-width
+           centre; from sm up the classic cross layout --%>
+      <div
+        id="table"
+        class="grid grid-cols-3 sm:grid-rows-[auto_1fr_auto] gap-2 sm:gap-3 items-center"
+      >
+        <div class="col-start-2 row-start-1 min-w-0 sm:justify-self-center">
           <.seat view={@view} seat={seat_at(@view, 2)} secs={@secs} reactions={@reactions} />
         </div>
-        <div class="col-start-1 row-start-2 justify-self-start">
+        <div class="col-start-1 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-start">
           <.seat view={@view} seat={seat_at(@view, 3)} secs={@secs} reactions={@reactions} />
         </div>
-        <div class="col-start-3 row-start-2 justify-self-end">
+        <div class="col-start-3 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-end">
           <.seat view={@view} seat={seat_at(@view, 1)} secs={@secs} reactions={@reactions} />
         </div>
 
         <div
           id="centre"
-          class="col-start-2 row-start-2 min-h-40 rounded-box bg-success/15 p-3 flex flex-col items-center justify-center gap-2"
+          class="col-span-3 row-start-2 sm:col-span-1 sm:col-start-2 min-h-32 sm:min-h-40 rounded-box bg-success/15 p-3 flex flex-col items-center justify-center gap-2"
         >
           <.centre view={@view} />
         </div>
@@ -531,7 +537,7 @@ defmodule TienLenWeb.TableLive do
     <div
       id={"seat-#{@seat}"}
       class={[
-        "rounded-box border px-2 py-1 sm:px-3 sm:py-2 min-w-24 sm:min-w-32 text-center text-sm sm:text-base",
+        "rounded-box border px-2 py-1 sm:px-3 sm:py-2 w-full sm:w-auto sm:min-w-32 text-center text-sm sm:text-base",
         @game && @game.current == @seat && @view.status == :playing && "border-primary bg-primary/10",
         !(@game && @game.current == @seat && @view.status == :playing) && "border-base-300"
       ]}

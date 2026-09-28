@@ -58,7 +58,7 @@ defmodule TienLenWeb.ChatComponents do
           maxlength="200"
           autocomplete="off"
           placeholder="Nhắn tin…"
-          class="input input-bordered input-sm flex-1"
+          class="input input-bordered input-sm flex-1 min-w-0"
         />
         <button class="btn btn-sm btn-primary">Gửi</button>
       </form>

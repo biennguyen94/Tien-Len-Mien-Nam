@@ -638,6 +638,32 @@ Project này không có JSON API (toàn bộ là LiveView), nhưng đây là d�
 
 ---
 
+### 10.6 Kiểm tra giao diện điện thoại bằng trình duyệt headless
+
+Playwright điều khiển một Chromium không có cửa sổ. Nhờ đó có thể mở trang ở độ rộng 360px, đo xem trang có bị cuộn ngang không, và chụp ảnh. Công cụ có sẵn ở `tools/mobile-audit` (xem README trong đó).
+
+```bash
+cd tools/mobile-audit && npm install && npx playwright install chromium
+BASE=http://localhost:4010 OUT=/tmp/shots node audit.js sau-khi-sua      # "83/83 OK" = không trang nào tràn
+
+# Đo nhanh một trang
+node -e '
+const { chromium } = require("playwright");
+(async () => { const b = await chromium.launch();
+  const p = await b.newPage({ viewport: { width: 360, height: 780 } });
+  await p.goto("http://localhost:4010/");
+  console.log(await p.evaluate(() => [document.documentElement.scrollWidth, innerWidth]));  // [360, 360] = không tràn
+  await p.screenshot({ path: "/tmp/sanh-360.png", fullPage: true });
+  await b.close(); })();'
+
+# Chromium báo thiếu thư viện (libnspr4.so…) mà không có sudo: tải gói .deb rồi giải nén, không cài
+cd /tmp/libs && apt-get download libnspr4 libnss3 libasound2t64 && for f in *.deb; do dpkg-deb -x $f root; done
+export LD_LIBRARY_PATH=/tmp/libs/root/usr/lib/x86_64-linux-gnu
+ldd ~/.cache/ms-playwright/*/chrome-headless-shell-linux64/chrome-headless-shell | grep "not found"   # còn thiếu gì
+```
+
+Mẹo tìm phần tử gây tràn: duyệt mọi phần tử, lấy những phần tử có `getBoundingClientRect().right` lớn hơn `innerWidth` (cách `audit.js` làm).
+
 ## 11. Docker và môi trường production
 
 ### 11.1 Vận hành hằng ngày

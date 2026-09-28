@@ -41,34 +41,37 @@ defmodule TienLenWeb.CoinHistoryLive do
         Coin chỉ dùng trong game: không nạp, không rút, không chuyển cho người khác.
       </p>
 
-      <table id="coin-history" class="table table-zebra">
-        <thead>
-          <tr>
-            <th>Thời gian</th>
-            <th>Nội dung</th>
-            <th class="text-right">Coin</th>
-            <th class="text-right">Số dư</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :for={row <- @rows} id={"tx-#{row.id}"}>
-            <td class="text-sm">{vn_time(row.inserted_at)}</td>
-            <td>
-              {Text.coin_reason(row.reason)}
-              <span :if={row.counterparty} class="text-base-content/60">
-                ({if row.amount > 0, do: "từ", else: "cho"} {row.counterparty})
-              </span>
-            </td>
-            <td class={[
-              "text-right tabular-nums",
-              if(row.amount > 0, do: "text-success", else: "text-error")
-            ]}>
-              {Text.signed_coins(row.amount)}
-            </td>
-            <td class="text-right tabular-nums">{Text.coins(row.balance_after)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <%!-- M3: a wide table scrolls inside its box on phones, never the page --%>
+      <div class="overflow-x-auto">
+        <table id="coin-history" class="table table-zebra table-sm sm:table-md">
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>Nội dung</th>
+              <th class="text-right">Coin</th>
+              <th class="text-right">Số dư</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={row <- @rows} id={"tx-#{row.id}"}>
+              <td class="text-sm">{vn_time(row.inserted_at)}</td>
+              <td>
+                {Text.coin_reason(row.reason)}
+                <span :if={row.counterparty} class="text-base-content/60">
+                  ({if row.amount > 0, do: "từ", else: "cho"} {row.counterparty})
+                </span>
+              </td>
+              <td class={[
+                "text-right tabular-nums",
+                if(row.amount > 0, do: "text-success", else: "text-error")
+              ]}>
+                {Text.signed_coins(row.amount)}
+              </td>
+              <td class="text-right tabular-nums">{Text.coins(row.balance_after)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </Layouts.app>
     """
   end

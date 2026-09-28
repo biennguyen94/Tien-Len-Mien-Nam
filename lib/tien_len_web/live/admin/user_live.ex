@@ -213,19 +213,22 @@ defmodule TienLenWeb.Admin.UserLive do
       </div>
 
       <h2 class="font-semibold">Lịch sử coin</h2>
-      <table id="user-ledger" class="table table-sm table-zebra">
-        <tbody>
-          <tr :for={row <- @detail.ledger}>
-            <td class="text-sm">{vn_time(row.inserted_at)}</td>
-            <td>
-              {Text.coin_reason(row.reason)}
-              <span :if={row.ref && row.reason == "admin_adjust"} class="text-base-content/60">({row.ref})</span>
-            </td>
-            <td class="text-right tabular-nums">{Text.signed_coins(row.amount)}</td>
-            <td class="text-right tabular-nums">{Text.coins(row.balance_after)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <%!-- M3: a wide table scrolls inside its box on phones, never the page --%>
+      <div class="overflow-x-auto">
+        <table id="user-ledger" class="table table-sm table-zebra">
+          <tbody>
+            <tr :for={row <- @detail.ledger}>
+              <td class="text-sm">{vn_time(row.inserted_at)}</td>
+              <td>
+                {Text.coin_reason(row.reason)}
+                <span :if={row.ref && row.reason == "admin_adjust"} class="text-base-content/60">({row.ref})</span>
+              </td>
+              <td class="text-right tabular-nums">{Text.signed_coins(row.amount)}</td>
+              <td class="text-right tabular-nums">{Text.coins(row.balance_after)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <h2 class="font-semibold">Ván gần đây</h2>
       <ul id="user-games" class="text-sm space-y-1">

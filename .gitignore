@@ -48,3 +48,7 @@ npm-debug.log
 # OS / editor
 .DS_Store
 *.swp
+
+# dev tool dependencies
+/tools/mobile-audit/node_modules/
+/tools/mobile-audit/package-lock.json

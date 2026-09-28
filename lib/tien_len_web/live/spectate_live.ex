@@ -127,16 +127,17 @@ defmodule TienLenWeb.SpectateLive do
         </div>
       </div>
 
-      <div id="watch-table" class="grid grid-cols-3 gap-3 items-center">
-        <div class="col-start-2 justify-self-center">
+      <%!-- M3: same phone layout as the table: opponents in one row, full-width centre --%>
+      <div id="watch-table" class="grid grid-cols-3 gap-2 sm:gap-3 items-center">
+        <div class="col-start-2 row-start-1 min-w-0 sm:justify-self-center">
           <.wseat view={@view} seat={2} secs={@secs} />
         </div>
-        <div class="col-start-1 row-start-2 justify-self-start">
+        <div class="col-start-1 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-start">
           <.wseat view={@view} seat={3} secs={@secs} />
         </div>
         <div
           id="centre"
-          class="col-start-2 row-start-2 min-h-32 rounded-box bg-success/15 p-3 flex flex-col items-center justify-center gap-2"
+          class="col-span-3 row-start-2 sm:col-span-1 sm:col-start-2 min-h-32 rounded-box bg-success/15 p-3 flex flex-col items-center justify-center gap-2"
         >
           <%= cond do %>
             <% @view.game && @view.game.centre -> %>
@@ -153,7 +154,7 @@ defmodule TienLenWeb.SpectateLive do
               <p class="text-base-content/70">Chờ ván mới</p>
           <% end %>
         </div>
-        <div class="col-start-3 row-start-2 justify-self-end">
+        <div class="col-start-3 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-end">
           <.wseat view={@view} seat={1} secs={@secs} />
         </div>
         <div class="col-span-3 row-start-3 justify-self-center">
@@ -193,7 +194,7 @@ defmodule TienLenWeb.SpectateLive do
     <div
       id={"watch-seat-#{@seat}"}
       class={[
-        "rounded-box border px-2 py-1 min-w-24 text-center text-sm",
+        "rounded-box border px-2 py-1 w-full sm:w-auto sm:min-w-24 text-center text-sm",
         @game && @view.status == :playing && @game.current == @seat && "border-primary bg-primary/10"
       ]}
     >

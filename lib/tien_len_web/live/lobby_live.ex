@@ -366,20 +366,18 @@ defmodule TienLenWeb.LobbyLive do
       </section>
 
       <section class="space-y-4">
-        <div class="flex items-center justify-between gap-2">
-          <p>
+        <%!-- M3: greeting and account actions in one row that wraps, left-aligned --%>
+        <div id="account" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p class="min-w-0 truncate">
             Xin chào <strong id="player-name">{@current_user.display_name}</strong>
-            <button :if={!@editing_name} phx-click="edit_name" class="btn btn-ghost btn-xs">
-              đổi tên
-            </button>
           </p>
-        </div>
-
-        <div class="text-sm">
-          <button id="toggle-password" phx-click="toggle_password" class="btn btn-ghost btn-xs">
+          <button :if={!@editing_name} phx-click="edit_name" class="btn btn-ghost btn-xs px-1">
+            đổi tên
+          </button>
+          <button id="toggle-password" phx-click="toggle_password" class="btn btn-ghost btn-xs px-1">
             đổi mật khẩu
           </button>
-          <label class="label text-sm gap-1 ml-2">
+          <label class="label text-sm gap-1">
             <input
               id="toggle-invites"
               type="checkbox"
@@ -393,14 +391,14 @@ defmodule TienLenWeb.LobbyLive do
           :if={@changing_password}
           id="password-form"
           phx-submit="change_password"
-          class="card bg-base-200 p-4 flex flex-wrap items-end gap-2"
+          class="card bg-base-200 p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2"
         >
           <input
             type="password"
             name="current"
             placeholder="Mật khẩu hiện tại"
             autocomplete="current-password"
-            class="input input-bordered input-sm"
+            class="input input-bordered input-sm w-full sm:w-auto"
             required
           />
           <input
@@ -408,7 +406,7 @@ defmodule TienLenWeb.LobbyLive do
             name="new"
             placeholder="Mật khẩu mới (8–72)"
             autocomplete="new-password"
-            class="input input-bordered input-sm"
+            class="input input-bordered input-sm w-full sm:w-auto"
             required
           />
           <button class="btn btn-sm btn-primary">Đổi mật khẩu</button>
@@ -438,12 +436,22 @@ defmodule TienLenWeb.LobbyLive do
         <section id="missions" class="card bg-base-200 p-4 space-y-2">
           <h2 class="font-semibold">Nhiệm vụ hôm nay</h2>
           <ul class="space-y-2">
-            <li :for={m <- @missions} id={"mission-#{m.key}"} class="flex items-center gap-2">
-              <span class="flex-1">
+            <li
+              :for={m <- @missions}
+              id={"mission-#{m.key}"}
+              class="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1"
+            >
+              <span class="w-full sm:w-auto sm:flex-1">
                 {m.title}
-                <span class="text-xs text-base-content/60">(+{Text.coins(m.reward)} coin)</span>
+                <span class="text-xs text-base-content/60 whitespace-nowrap">
+                  (+{Text.coins(m.reward)} coin)
+                </span>
               </span>
-              <progress class="progress progress-primary w-20" value={m.progress} max={m.goal} />
+              <progress
+                class="progress progress-primary flex-1 sm:flex-none sm:w-20"
+                value={m.progress}
+                max={m.goal}
+              />
               <span class="text-sm tabular-nums w-10 text-right">{m.progress}/{m.goal}</span>
               <button
                 :if={m.done and not m.claimed}
@@ -462,8 +470,14 @@ defmodule TienLenWeb.LobbyLive do
           </p>
         </section>
 
-        <.form for={@room_form} id="create-room-form" phx-submit="create" class="flex items-end gap-2">
-          <div class="w-44">
+        <%!-- M3: stacked on phones (label, input, private, button, note); one row from sm up --%>
+        <.form
+          for={@room_form}
+          id="create-room-form"
+          phx-submit="create"
+          class="flex flex-col sm:flex-row sm:items-end gap-x-2"
+        >
+          <div class="w-full sm:w-44">
             <.input
               field={@room_form[:stake]}
               type="number"
@@ -472,7 +486,7 @@ defmodule TienLenWeb.LobbyLive do
               label="Tiền cược mỗi ván"
             />
           </div>
-          <label class="label mb-3 text-sm gap-1">
+          <label class="label mb-3 text-sm gap-1 self-start sm:self-auto">
             <input type="hidden" name="room[private]" value="false" />
             <input
               id="room-private"
@@ -482,8 +496,10 @@ defmodule TienLenWeb.LobbyLive do
               class="checkbox checkbox-sm"
             /> Riêng tư
           </label>
-          <button id="create-room" type="submit" class="btn btn-primary mb-2">Tạo phòng</button>
-          <span class="text-xs text-base-content/60 mb-3">
+          <button id="create-room" type="submit" class="btn btn-primary w-full sm:w-auto mb-2">
+            Tạo phòng
+          </button>
+          <span class="text-xs text-base-content/60 sm:mb-3">
             Cược 0 = chơi vui, hoặc từ 10. Phòng riêng tư không hiện ở sảnh, chỉ vào bằng lời mời hoặc link.
           </span>
         </.form>
@@ -494,9 +510,13 @@ defmodule TienLenWeb.LobbyLive do
         </p>
 
         <ul :if={@rooms != []} id="rooms" class="divide-y divide-base-300 rounded-box bg-base-200">
-          <li :for={room <- @rooms} id={"room-#{room.id}"} class="flex items-center gap-3 p-3">
+          <li
+            :for={room <- @rooms}
+            id={"room-#{room.id}"}
+            class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3"
+          >
             <span class="font-mono text-sm">{room.id}</span>
-            <span class="flex-1 truncate">Chủ phòng: {room.host_name || "—"}</span>
+            <span class="flex-1 min-w-32 truncate">Chủ phòng: {room.host_name || "—"}</span>
             <span class="tabular-nums">{room.players}/{room.max_players}</span>
             <span class="text-sm tabular-nums">
               {if room.stake == 0, do: "Chơi vui", else: "Cược " <> Text.coins(room.stake)}
