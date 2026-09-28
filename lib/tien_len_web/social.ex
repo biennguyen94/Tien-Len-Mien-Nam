@@ -214,6 +214,7 @@ defmodule TienLenWeb.Social do
   def place_label("lobby"), do: "Ở sảnh"
   def place_label("room"), do: "Trong phòng"
   def place_label("playing"), do: "Đang chơi"
+  def place_label("watching"), do: "Đang xem"
   def place_label(_), do: "Online"
 
   # -- rendering --------------------------------------------------------------------

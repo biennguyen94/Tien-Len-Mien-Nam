@@ -237,3 +237,11 @@ Tien-Len-Mien-Nam/
 ## Phase 36 — Emoji reactions; deploy (R1) — DONE (2026-09-28)
 
 - [x] `RoomServer.react/3`, emoji bar; migration deployed.
+
+## Phase 37 — Spectators (V1, V3, V4) — DONE (2026-09-28)
+
+- [x] `RoomServer.watch/1`, `spectator_view/1`, `/phong/:id/xem`, lobby "Xem", 👀 count.
+
+## Phase 38 — Replays; deploy (V2, V5, V6) — DONE (2026-09-28)
+
+- [x] `games.replay`, replay capture in the room server, `TienLen.Replay`, `/van/:id`, links from history / admin.

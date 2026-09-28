@@ -11,7 +11,7 @@ defmodule TienLen.Presence do
 
   @topic "online"
   # the most specific place wins when a player has several pages open
-  @rank %{"playing" => 3, "room" => 2, "lobby" => 1, "other" => 0}
+  @rank %{"playing" => 4, "room" => 3, "watching" => 2, "lobby" => 1, "other" => 0}
 
   def topic, do: @topic
 

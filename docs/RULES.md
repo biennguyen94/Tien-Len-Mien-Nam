@@ -1,6 +1,6 @@
 # Rules — Tiến Lên Miền Nam (target ruleset)
 
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 This is the **source of truth** for the game rules of this project. It consolidates every decision in `PORTING_STATUS.md` → Decisions (D1–D9, Q1–Q8, #12–#18, R1–R7, S1–S7, I1–I8).
 Rule IDs **T1–T25** are stable (T19–T25: coins, §17); code, tests and docs should cite them.
@@ -166,7 +166,7 @@ When at least one player qualifies:
 - **Only the host can start a game**, and only with **at least 2 players** (host included) (R6).
 - **Nobody joins during a game.** Players seated between games take part in the next one.
 - **Host leaves or disconnects:** host rights pass to the next remaining player in seat order (S6), after the disconnect timeout (§15.3). The room stays open while at least one player remains.
-- **No spectators** (#17).
+- **Spectators** may watch without a seat (V1, supersedes #17); they receive only public information (§13).
 
 ## 12. Timeouts and disconnects — T15, T16
 
@@ -199,6 +199,8 @@ When at least one player qualifies:
   - connection status.
 - **Never sent to any client:** other hands, undealt cards, the seed or PRNG state, other players' selections, and unredacted logs.
 - **Exception:** an instant winner's hand is revealed (§10).
+- **Spectators** (V1, supersedes #17) receive only what "everyone sees" above; no hand, no room chat.
+- **Replays** (V2) show every dealt hand and every play, but only after the game is over and recorded, to its players and admins (V5, V6).
 
 ## 14. Authority — T17
 
@@ -280,8 +282,8 @@ Coins are virtual and only exist inside the game (C1). **All amounts are compute
 | T10 | Q8, R3, S2, S4 |
 | T11 | Q5, S5 |
 | T12 | original (seat order) |
-| T13 | D8, R6, S6, #17 |
-| T14 | #15, #17, I8 |
+| T13 | D8, R6, S6, #17, V1 |
+| T14 | #15, #17, I8, V1, V2 |
 | T15 | #18, R5, S5 |
 | T16 | S1 |
 | T17 | D1, R3 |

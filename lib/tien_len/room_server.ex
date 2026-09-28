@@ -46,6 +46,8 @@ defmodule TienLen.RoomServer do
   ]
   # room chat kept in memory (G1)
   @chat_keep 50
+  # V4
+  @max_spectators 20
 
   # -- API ----------------------------------------------------------------------
 
@@ -143,6 +145,15 @@ defmodule TienLen.RoomServer do
   def set_private(room_id, player_id, private?),
     do: call(room_id, {:set_private, player_id, private?})
 
+  @doc """
+  Watches the room as a spectator (V1–V4): monitors the caller and returns the public view.
+  At most #{20} spectators. `{:ok, view}` or `{:error, reason}`.
+  """
+  def watch(room_id), do: call(room_id, :watch)
+
+  @doc "The public view for spectators: no hand, no chat (V2, V3)."
+  def spectator_view(room_id), do: call(room_id, :spectator_view)
+
   @doc "True if `player_id` is seated in the room."
   def seated?(room_id, player_id), do: call(room_id, {:seated?, player_id})
 
@@ -215,6 +226,10 @@ defmodule TienLen.RoomServer do
        # coins moved in the current / last game: seat => net amount, and chains settled
        coin_deltas: %{},
        chain_no: 0,
+       # V1: spectator pid => monitor ref
+       spectators: %{},
+       # V5: replay of the running game (dealt hands + public events), stored at game over
+       replay: nil,
        # %{ref, seat, deadline} of the running turn timer
        turn: nil,
        # B5: pending bot action (ref) and the delay before a bot acts
@@ -353,6 +368,22 @@ defmodule TienLen.RoomServer do
     end
   end
 
+  def handle_call(:watch, {pid, _tag}, state) do
+    cond do
+      Map.has_key?(state.spectators, pid) ->
+        {:reply, {:ok, public_view(state)}, state}
+
+      map_size(state.spectators) >= @max_spectators ->
+        {:reply, {:error, :too_many_spectators}, state}
+
+      true ->
+        state = %{state | spectators: Map.put(state.spectators, pid, Process.monitor(pid))}
+        {:reply, {:ok, public_view(state)}, spectators_changed(state)}
+    end
+  end
+
+  def handle_call(:spectator_view, _from, state), do: {:reply, public_view(state), state}
+
   def handle_call({:seated?, player_id}, _from, state),
     do: {:reply, Room.seat_of(state.room, player_id) != nil, state}
 
@@ -409,6 +440,7 @@ defmodule TienLen.RoomServer do
         |> Map.put(:turn_ms_left, turn_ms_left(state))
         |> Map.put(:coin_deltas, state.coin_deltas)
         |> Map.put(:balances, seat_balances(state))
+        |> Map.put(:spectators, map_size(state.spectators))
 
       {:reply, view, state}
     end
@@ -471,6 +503,11 @@ defmodule TienLen.RoomServer do
   end
 
   def handle_info({:bot_act, _stale}, state), do: {:noreply, state}
+
+  def handle_info({:DOWN, mref, :process, pid, _reason}, %{spectators: specs} = state)
+      when is_map_key(specs, pid) and :erlang.map_get(pid, specs) == mref do
+    {:noreply, spectators_changed(%{state | spectators: Map.delete(specs, pid)})}
+  end
 
   def handle_info({:DOWN, mref, :process, pid, _reason}, state) do
     case state.pids do
@@ -556,6 +593,7 @@ defmodule TienLen.RoomServer do
 
     # coins first, so the recorded game carries each player's net coins (P2)
     {state, events} = settle_coins(state, events)
+    state = track_replay(state, events)
     if Enum.any?(events, &(elem(&1, 0) == :game_over)), do: record_result(state)
 
     Phoenix.PubSub.broadcast(
@@ -663,14 +701,14 @@ defmodule TienLen.RoomServer do
   # Y6: a failing write is logged and never interrupts play.
   defp record_result(%{recorder: nil}), do: :ok
 
-  defp record_result(%{recorder: recorder, room: room, id: id, coin_deltas: deltas}) do
+  defp record_result(%{recorder: recorder, room: room, id: id, coin_deltas: deltas} = state) do
     case Room.result(room) do
       nil ->
         :ok
 
       result ->
         players = Enum.map(result.players, &Map.put(&1, :coins, Map.get(deltas, &1.seat, 0)))
-        recorder.record(%{result | players: players})
+        recorder.record(result |> Map.put(:players, players) |> Map.put(:replay, state.replay))
     end
   rescue
     error ->
@@ -679,6 +717,89 @@ defmodule TienLen.RoomServer do
     kind, reason ->
       Logger.error("room #{id}: could not record the game result: #{inspect({kind, reason})}")
   end
+
+  # -- spectators (V1–V4) -------------------------------------------------------------
+
+  defp public_view(state) do
+    state.room
+    |> Room.view(nil)
+    |> Map.put(:turn_ms_left, turn_ms_left(state))
+    |> Map.put(:coin_deltas, state.coin_deltas)
+    |> Map.put(:balances, seat_balances(state))
+    |> Map.put(:spectators, map_size(state.spectators))
+  end
+
+  # the count is public; views are re-read by subscribers on any update
+  defp spectators_changed(state) do
+    state = %{state | version: state.version + 1}
+
+    Phoenix.PubSub.broadcast(
+      TienLen.PubSub,
+      topic(state.id),
+      {:room_updated, state.id, state.version, [{:spectators, map_size(state.spectators)}]}
+    )
+
+    state
+  end
+
+  # -- replay (V5) ---------------------------------------------------------------------
+
+  # A new game starts a replay with the dealt hands; public game events are appended. It is
+  # only stored with the recorded result at game over (never shown while the game runs).
+  defp track_replay(state, events) do
+    replay =
+      case Enum.find(events, &(elem(&1, 0) == :game_started)) do
+        {:game_started, seats} ->
+          game = state.room.game
+
+          %{
+            "seats" => Enum.map(seats, &%{"seat" => &1, "name" => state.room.seats[&1].name}),
+            "hands" => Map.new(seats, &{to_string(&1), codes(game.hands[&1])}),
+            "events" => []
+          }
+
+        nil ->
+          state.replay
+      end
+
+    case replay do
+      nil ->
+        %{state | replay: nil}
+
+      replay ->
+        new = Enum.flat_map(events, &replay_event/1)
+        %{state | replay: Map.update!(replay, "events", &(&1 ++ new))}
+    end
+  end
+
+  defp codes(cards), do: cards |> TienLen.Card.sort() |> Enum.map(&TienLen.Card.to_code/1)
+
+  defp replay_event({t, seat, combo}) when t in [:played, :chopped],
+    do: [
+      %{"t" => to_string(t), "s" => seat, "c" => codes(combo.cards), "k" => to_string(combo.type)}
+    ]
+
+  defp replay_event({t, seat})
+       when t in [:passed, :timed_out, :removed, :round_ended, :lead_moved],
+       do: [%{"t" => to_string(t), "s" => seat}]
+
+  defp replay_event({:finished, seat, pos}), do: [%{"t" => "finished", "s" => seat, "p" => pos}]
+  defp replay_event({:game_over, ranking}), do: [%{"t" => "game_over", "r" => ranking}]
+
+  defp replay_event({:instant_win, winners}),
+    do: [
+      %{"t" => "instant_win", "w" => Enum.map(winners, fn {s, type} -> [s, to_string(type)] end)}
+    ]
+
+  defp replay_event({:coins, transfers}),
+    do: [
+      %{
+        "t" => "coins",
+        "x" => Enum.map(transfers, &%{"from" => &1.from, "to" => &1.to, "amount" => &1.amount})
+      }
+    ]
+
+  defp replay_event(_event), do: []
 
   # -- bots (B5) ----------------------------------------------------------------------
 

@@ -36,7 +36,7 @@ defmodule TienLenWeb.Text do
     not_enough_coins: "Cần ít nhất 2 người có đủ 10× tiền cược",
     invalid_stake: "Tiền cược phải là 0 hoặc từ 10 trở lên",
     already_claimed: "Hôm nay bạn đã nhận rồi",
-    not_eligible: "Chỉ nhận được khi còn dưới 100 coin",
+    not_eligible: "Chỉ nhận được cứu trợ khi số coin còn quá ít",
     not_found: "Không tìm thấy",
     forbidden: "Bạn không có quyền làm việc này",
     already_admin: "Người này đã là admin",
@@ -77,7 +77,8 @@ defmodule TienLenWeb.Text do
     mission_not_done: "Nhiệm vụ chưa hoàn thành",
     unknown_mission: "Không có nhiệm vụ này",
     invalid_avatar: "Ảnh đại diện không hợp lệ",
-    season_not_over: "Mùa giải chưa kết thúc"
+    season_not_over: "Mùa giải chưa kết thúc",
+    too_many_spectators: "Phòng đã đủ 20 người xem"
   }
 
   @types %{

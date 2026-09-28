@@ -49,6 +49,7 @@ defmodule TienLen.Stats do
           Repo.insert!(%GameRecord{
             room_id: to_string(result.room_id),
             ref: Map.get(result, :ref),
+            replay: Map.get(result, :replay),
             player_count: result.player_count,
             instant_win: result.instant_win,
             finished_at: now
@@ -186,6 +187,34 @@ defmodule TienLen.Stats do
   end
 
   @doc """
+  A recorded game with its replay (V5, V6), for a player of that game or an admin:
+  `{:ok, %{game, players, replay}}`, or `{:error, :not_found | :forbidden | :no_replay}`.
+  """
+  def replay(game_id, %User{} = viewer) do
+    game =
+      is_integer(game_id) &&
+        Repo.one(
+          from g in GameRecord,
+            where: g.id == ^game_id,
+            preload: [players: ^from(p in GamePlayer, order_by: p.seat, preload: :user)]
+        )
+
+    cond do
+      !game ->
+        {:error, :not_found}
+
+      not (User.admin?(viewer) or Enum.any?(game.players, &(&1.user_id == viewer.id))) ->
+        {:error, :forbidden}
+
+      game.replay == nil ->
+        {:error, :no_replay}
+
+      true ->
+        {:ok, %{game: game, players: game.players, replay: game.replay}}
+    end
+  end
+
+  @doc """
   The user's most recent games, newest first: `%{finished_at, player_count, instant_win, place,
   won, removed, players: [%{display_name, place, won, removed, me}]}`.
   """
@@ -211,6 +240,7 @@ defmodule TienLen.Stats do
 
       %{
         id: g.id,
+        has_replay: g.replay != nil,
         finished_at: g.finished_at,
         player_count: g.player_count,
         instant_win: g.instant_win,

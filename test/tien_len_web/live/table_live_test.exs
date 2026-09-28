@@ -209,7 +209,8 @@ defmodule TienLenWeb.TableLiveTest do
         :mission_not_done,
         :unknown_mission,
         :invalid_avatar,
-        :season_not_over
+        :season_not_over,
+        :too_many_spectators
       ]
 
       assert Enum.sort(reasons) == Enum.sort(Text.known_reasons())

@@ -57,7 +57,10 @@ defmodule TienLen.Invites do
   """
   def candidates(user_id) do
     users =
-      Enum.filter(Presence.online_users(), &(&1.id != user_id and &1.place in ["lobby", "other"]))
+      Enum.filter(
+        Presence.online_users(),
+        &(&1.id != user_id and &1.place in ["lobby", "other", "watching"])
+      )
 
     off = users |> Enum.map(& &1.id) |> Accounts.invites_off() |> MapSet.new()
     friends = TienLen.Friends.friend_ids(user_id)

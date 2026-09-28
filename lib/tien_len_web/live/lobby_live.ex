@@ -115,7 +115,9 @@ defmodule TienLenWeb.LobbyLive do
     case Economy.claim_daily_bonus(id) do
       {:ok, _balance} ->
         {:noreply,
-         socket |> put_flash(:info, "Đã nhận thưởng ngày +100 coin") |> assign_claimable()}
+         socket
+         |> put_flash(:info, "Đã nhận thưởng ngày +#{Text.coins(Economy.daily_bonus())} coin")
+         |> assign_claimable()}
 
       {:error, reason} ->
         {:noreply, socket |> put_flash(:error, Text.reason(reason)) |> assign_claimable()}
@@ -125,7 +127,10 @@ defmodule TienLenWeb.LobbyLive do
   def handle_event("claim_relief", _params, %{assigns: %{current_user: %{id: id}}} = socket) do
     case Economy.claim_relief(id) do
       {:ok, _balance} ->
-        {:noreply, socket |> put_flash(:info, "Đã nhận cứu trợ +500 coin") |> assign_claimable()}
+        {:noreply,
+         socket
+         |> put_flash(:info, "Đã nhận cứu trợ +#{Text.coins(Economy.relief())} coin")
+         |> assign_claimable()}
 
       {:error, reason} ->
         {:noreply, socket |> put_flash(:error, Text.reason(reason)) |> assign_claimable()}
@@ -417,7 +422,7 @@ defmodule TienLenWeb.LobbyLive do
             phx-click="claim_daily"
             class="btn btn-sm btn-success"
           >
-            Nhận thưởng ngày (+100)
+            Nhận thưởng ngày (+{Text.coins(Economy.daily_bonus())})
           </button>
           <button
             :if={@claimable.relief}
@@ -425,7 +430,7 @@ defmodule TienLenWeb.LobbyLive do
             phx-click="claim_relief"
             class="btn btn-sm btn-warning"
           >
-            Nhận cứu trợ (+500)
+            Nhận cứu trợ (+{Text.coins(Economy.relief())})
           </button>
           <.link navigate={~p"/lich-su-coin"} class="link text-sm">Lịch sử coin</.link>
         </div>
@@ -508,6 +513,13 @@ defmodule TienLenWeb.LobbyLive do
               class="btn btn-sm btn-outline"
             >
               Vào
+            </.link>
+            <.link
+              id={"watch-#{room.id}"}
+              navigate={~p"/phong/#{room.id}/xem"}
+              class="btn btn-sm btn-ghost"
+            >
+              Xem
             </.link>
           </li>
         </ul>

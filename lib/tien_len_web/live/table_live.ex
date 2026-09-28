@@ -377,6 +377,14 @@ defmodule TienLenWeb.TableLive do
         </p>
         <div class="flex items-center gap-1">
           <span :if={@view.private} id="private-badge" class="badge badge-info">Riêng tư</span>
+          <span
+            :if={(@view[:spectators] || 0) > 0}
+            id="spectator-count"
+            class="badge badge-ghost"
+            title="Người đang xem"
+          >
+            👀 {@view.spectators}
+          </span>
           <button
             id="copy-link"
             phx-hook="CopyLink"

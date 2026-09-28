@@ -9,8 +9,9 @@ It started as a port of [nguyenank/tien-len](https://github.com/nguyenank/tien-l
 - instant wins (tới trắng);
 - several games per room, with turn and disconnect timeouts.
 
-**Status:** complete and deployed with PostgreSQL (Docker, http://localhost:4020): accounts (register / login / logout), leaderboard by 1st places, game history, virtual coins (stakes, chặt heo, thối heo, daily bonus; no real money), bots (dễ / thường), player profiles with avatars, friends, daily missions, weekly seasons, emoji reactions, hints, a phone layout, room / lobby / private chat, invites and private rooms, and an admin area (`/quan-tri`: users, coin adjustments, rooms, game history, announcements, settings). See `docs/PORTING_STATUS.md` and `docs/DEPLOY.md`.
+**Status:** complete and deployed with PostgreSQL (Docker, http://localhost:4020): accounts (register / login / logout), leaderboard by 1st places, game history, virtual coins (stakes, chặt heo, thối heo, daily bonus; no real money), bots (dễ / thường), player profiles with avatars, friends, daily missions, weekly seasons, emoji reactions, spectators, game replays, hints, a phone layout, room / lobby / private chat, invites and private rooms, and an admin area (`/quan-tri`: users, coin adjustments, rooms, game history, announcements, settings). See `docs/PORTING_STATUS.md` and `docs/DEPLOY.md`.
 
+- Hướng dẫn người chơi: [`docs/HUONG_DAN_NGUOI_CHOI.md`](docs/HUONG_DAN_NGUOI_CHOI.md) · Hướng dẫn admin: [`docs/HUONG_DAN_ADMIN.md`](docs/HUONG_DAN_ADMIN.md)
 - Rules: [`docs/RULES.md`](docs/RULES.md)
 - Plan: [`docs/PORTING_PLAN.md`](docs/PORTING_PLAN.md)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)

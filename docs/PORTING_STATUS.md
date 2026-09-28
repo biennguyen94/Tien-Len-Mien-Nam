@@ -40,8 +40,10 @@ Last updated: 2026-09-28
 | 34 | Daily missions | **DONE** (2026-09-28) |
 | 35 | Weekly seasons | **DONE** (2026-09-28) |
 | 36 | Emoji reactions; deploy | **DONE** (2026-09-28) |
+| 37 | Spectators | **DONE** (2026-09-28) |
+| 38 | Replays; deploy | **DONE** (2026-09-28) |
 
-Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
+Current architecture (modules, processes, database, routes, visibility): `ARCHITECTURE.md` Part 2. What was delivered and verified in each phase: the results sections below.
 
 ## Decisions
 
@@ -77,7 +79,7 @@ When a decision is replaced, the old row stays and the new one says what it supe
 | #12 | Clear the centre when a new round starts. | T9 |
 | #15 | Remaining card counts are public. | T14 |
 | #16 | Same-rank pairs compare by the highest suit. | T6 |
-| #17 | No spectators in the first release. | T13, T14 |
+| #17 | No spectators in the first release. **Superseded by V1 (2026-09-28).** | T13, T14 |
 | #18 | A disconnected player keeps the seat for a timeout and reconnects with a seat token; they are never auto-winners. | T15 |
 
 ### Batch 3 — conflicts and gaps
@@ -281,6 +283,17 @@ The owner asked for #4–#8 "theo cách bạn thấy hợp lý nhất" without b
 | S3 | Ledger reason `season_reward`, ref "Tuần dd/mm – dd/mm"; "Tuần trước" lists what was paid. |
 | S4 | No reset of the all-time leaderboard; the week is a separate view. |
 | R1 | **Emoji reactions** at the table (😂 👏 😮 😡 👍 🔥): seated players only, shown on their seat for 3 s, 3 per 5 s, never stored. |
+
+### Batch 12 — spectators and replays (2026-09-28)
+
+| # | Decision | Changes |
+|---|---|---|
+| V1 | **Spectators are allowed** (owner: "OK"): anyone logged in can watch a room without a seat, at `/phong/<id>/xem` or with "Xem" in the lobby. They see only public information: names, card counts, the centre, whose turn and the timer, results. | **Supersedes #17** (T13, T14) |
+| V2 | **Replays show every hand after the game** (owner: "Có"). | Exception to T14, after game over only |
+| V3 | (Claude) Spectators do not see or write the room chat and do not react. | – |
+| V4 | (Claude) At most **20 spectators** per room. Players see the count (👀). A player seated in the room is sent to the table. Private rooms can be watched by anyone with the link. | – |
+| V5 | (Claude) The replay is the dealt hands plus the public events. It is built while the game runs but **stored only with the recorded result at game over**. Games with bots (not recorded) and games recorded before this change have no replay. | – |
+| V6 | (Claude) A replay can be opened by the **players of that game and admins**, from "Lịch sử" (and the admin "Ván" page). Controls: first, previous, next, last, auto-play, jump to any step. | – |
 
 ### Project decisions
 
@@ -1159,6 +1172,42 @@ The owner asked for #4–#8 "theo cách bạn thấy hợp lý nhất" without b
 
 - Games recorded before this deploy have `chops = 0`, `coins = 0`, `instant = false`: profile numbers for chặt heo / coins / tới trắng start from now.
 - Missions and seasons pay coins: farming with several accounts is possible (see RISKS P12, P19).
+
+## Phases 37–38 results — spectators and replays (2026-09-28)
+
+### Delivered
+
+- **Spectators (V1, V3, V4):**
+  - `RoomServer.watch/1` monitors the watcher (max 20); `spectator_view/1` = `Room.view(room, nil)` plus timer and results, without chat;
+  - players' views carry `spectators`; `{:spectators, n}` updates are broadcast;
+  - `SpectateLive` (`/phong/:id/xem`), "Xem" in the lobby list, 👀 count on the table;
+  - presence place `watching` ("Đang xem"), which can still be invited.
+- **Replays (V2, V5, V6):**
+  - migration `add_game_replay` (`games.replay` jsonb);
+  - the room server builds the replay from `:game_started` (dealt hands, seat names) and the public events (played, chopped, passed, timed_out, removed, round_ended, lead_moved, finished, instant_win, coins, game_over), and passes it to the recorder at game over;
+  - `Stats.replay/2` (players + admins), `has_replay` in history;
+  - pure `TienLen.Replay.frames/1`; `ReplayLive` (`/van/:id`) with step controls, auto-play and the step list; links in "Lịch sử" and the admin "Ván" page.
+
+### VERIFIED
+
+- `mix precommit`: **413 passed (2 doctests, 411 tests)**, no warnings; 30 runs of the new tests and 5 full runs clean after one fix (a fixed 20 ms sleep for the watcher's `:DOWN` → polling).
+- Domain tests:
+  - the spectator view has no hand, no chat, no foreign card anywhere in it (`inspect` check);
+  - the count follows monitors; the limit of 20;
+  - a real 2-player game's replay (hands, names, event types, chop counted) survives JSON; frames rebuild the hands and the centre;
+  - access for players / admins / others; `no_replay` for older games; `has_replay`.
+- LiveView tests:
+  - a spectator page shows the count, the players see 👀, no hand image or chat is rendered, and the page updates live after a play;
+  - a seated player is redirected to the table; the lobby has "Xem";
+  - replay: history link, deal, next step text and centre, the card leaves the hand, last step, first step, a stranger is refused.
+- **Production** (`rpc`, 2 temporary accounts):
+  - a watcher got a view without hands; players saw 1 spectator;
+  - a fixed-deal game was recorded with a replay of 8 steps.
+  - The game row and the accounts were deleted afterwards; no errors in the log.
+
+### NOT VERIFIED
+
+- The spectator and replay pages on a real phone.
 
 ## Environment state
 

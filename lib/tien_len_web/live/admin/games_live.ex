@@ -41,6 +41,9 @@ defmodule TienLenWeb.Admin.GamesLive do
             {vn_time(g.game.finished_at)} · phòng <span class="font-mono">{g.game.room_id}</span>
             · {g.game.player_count} người
             <span :if={g.game.instant_win} class="badge badge-warning badge-sm">tới trắng</span>
+            <.link :if={g.game.replay} navigate={~p"/van/#{g.game.id}"} class="link ml-2">
+              ▶ Xem lại
+            </.link>
           </p>
           <p>
             <span :for={p <- g.players} class="mr-3">#{p.place} {p.user.display_name}<span :if={

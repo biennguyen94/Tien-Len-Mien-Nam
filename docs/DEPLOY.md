@@ -107,6 +107,10 @@ docker compose ps                                                               
 
 ## Verification
 
+### Phases 37–38 (2026-09-28), spectators and replays
+
+- The `add_game_replay` migration ran at start. Via `rpc`: a spectator got no hands; a fixed 2-player game was recorded with a replay (8 steps). The test game and accounts were deleted.
+
 ### Phases 32–36 (2026-09-28), profile, friends, missions, seasons, reactions
 
 - The `add_social_features` migration ran at start. The season scheduler pays last week's top 3 within an hour of any start (idempotent).

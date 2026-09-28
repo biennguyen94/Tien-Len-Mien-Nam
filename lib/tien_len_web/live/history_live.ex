@@ -59,6 +59,14 @@ defmodule TienLenWeb.HistoryLive do
             </span>
             <span :if={g.instant_win} class="badge badge-warning badge-sm">tới trắng</span>
           </p>
+          <.link
+            :if={g.has_replay}
+            id={"replay-#{g.id}"}
+            navigate={~p"/van/#{g.id}"}
+            class="link text-sm"
+          >
+            ▶ Xem lại ván
+          </.link>
         </li>
       </ul>
     </Layouts.app>
