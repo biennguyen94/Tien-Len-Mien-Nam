@@ -199,7 +199,17 @@ defmodule TienLenWeb.TableLiveTest do
         :cannot_mute_self,
         :not_muted,
         :invalid_duration,
-        :bots_need_free_room
+        :bots_need_free_room,
+        :cannot_friend_self,
+        :already_friends,
+        :request_pending,
+        :too_many_friends,
+        :too_many_requests,
+        :friend_too_fast,
+        :mission_not_done,
+        :unknown_mission,
+        :invalid_avatar,
+        :season_not_over
       ]
 
       assert Enum.sort(reasons) == Enum.sort(Text.known_reasons())

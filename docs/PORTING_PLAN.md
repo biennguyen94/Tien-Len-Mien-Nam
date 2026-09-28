@@ -217,3 +217,23 @@ Tien-Len-Mien-Nam/
 ## Phase 31 — Phone layout, hand order; deploy (M1, M2) — DONE (2026-09-28)
 
 - [x] Overlapping hand, compact seats, sticky actions, sort toggle; deployed.
+
+## Phase 32 — Profile, avatars, per-player facts (P1–P4) — DONE (2026-09-28)
+
+- [x] `game_players.chops/coins/instant`, `Stats.profile/1`, `/nguoi-choi/:username`, avatar picker.
+
+## Phase 33 — Friends (FR1–FR5) — DONE (2026-09-28)
+
+- [x] `TienLen.Friends`, `/ban-be`, header badge, friends first in invite / online lists.
+
+## Phase 34 — Daily missions (M1–M4) — DONE (2026-09-28)
+
+- [x] `TienLen.Missions`, `Economy.grant/5`, lobby card.
+
+## Phase 35 — Weekly seasons (S1–S4) — DONE (2026-09-28)
+
+- [x] `TienLen.Seasons` + hourly scheduler, "Tuần này" / "Tuần trước" tabs.
+
+## Phase 36 — Emoji reactions; deploy (R1) — DONE (2026-09-28)
+
+- [x] `RoomServer.react/3`, emoji bar; migration deployed.

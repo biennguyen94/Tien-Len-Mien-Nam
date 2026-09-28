@@ -59,7 +59,10 @@ defmodule TienLen.Stats do
           Enum.map(
             players,
             &Map.merge(Map.take(&1, [:user_id, :seat, :place, :won, :removed]), %{
-              game_id: game.id
+              game_id: game.id,
+              chops: Map.get(&1, :chops, 0),
+              coins: Map.get(&1, :coins, 0),
+              instant: Map.get(&1, :instant, false)
             })
           )
         )
@@ -75,10 +78,12 @@ defmodule TienLen.Stats do
 
   @doc """
   Leaderboard rows `%{rank, user_id, username, display_name, games, wins, win_rate}` for users
-  with at least one game.
+  with at least one game. `period` limits it to games finished in `{from, to}` (UTC, `to`
+  excluded), used by the weekly season (S1).
   """
-  def leaderboard(limit \\ 50) do
+  def leaderboard(limit \\ 50, period \\ nil) do
     base_query()
+    |> in_period(period)
     |> limit(^limit)
     |> Repo.all()
     |> Enum.with_index(1)
@@ -94,15 +99,26 @@ defmodule TienLen.Stats do
     end)
   end
 
+  defp in_period(query, nil), do: query
+
+  defp in_period(query, {from, to}) do
+    from([gp, u] in query,
+      join: g in GameRecord,
+      on: g.id == gp.game_id,
+      where: g.finished_at >= ^from and g.finished_at < ^to
+    )
+  end
+
   defp base_query do
     from(gp in GamePlayer,
       join: u in User,
       on: u.id == gp.user_id,
-      group_by: [u.id, u.username, u.display_name],
+      group_by: [u.id, u.username, u.display_name, u.avatar],
       select: %{
         user_id: u.id,
         username: u.username,
         display_name: u.display_name,
+        avatar: u.avatar,
         games: count(gp.id),
         wins: filter(count(gp.id), gp.won),
         win_rate: fragment("?::float / ?", filter(count(gp.id), gp.won), count(gp.id))
@@ -114,6 +130,59 @@ defmodule TienLen.Stats do
         asc: u.username
       ]
     )
+  end
+
+  @doc """
+  Profile numbers of a user (P2): games, wins (1st places), win rate, average place, chặt heo,
+  tới trắng, net coins from games, biggest win in one game.
+  """
+  def profile(user_id) do
+    from(gp in GamePlayer,
+      where: gp.user_id == ^user_id,
+      select: %{
+        games: count(gp.id),
+        wins: filter(count(gp.id), gp.won),
+        avg_place: avg(gp.place),
+        chops: coalesce(sum(gp.chops), 0),
+        instant_wins: filter(count(gp.id), gp.instant),
+        coins: coalesce(sum(gp.coins), 0),
+        best_coins: coalesce(max(gp.coins), 0)
+      }
+    )
+    |> Repo.one()
+    |> then(fn row ->
+      %{
+        row
+        | avg_place: row.avg_place && Decimal.to_float(row.avg_place) |> Float.round(2),
+          chops: to_int(row.chops),
+          coins: to_int(row.coins),
+          best_coins: max(to_int(row.best_coins), 0)
+      }
+      |> Map.put(:win_rate, if(row.games > 0, do: row.wins / row.games, else: 0.0))
+    end)
+  end
+
+  defp to_int(%Decimal{} = d), do: Decimal.to_integer(d)
+  defp to_int(n) when is_integer(n), do: n
+  defp to_int(nil), do: 0
+
+  @doc """
+  Counts of a user's recorded games finished in `{from, to}` (UTC): `%{games, wins, chops}`
+  (daily missions, M1).
+  """
+  def counts(user_id, {from, to}) do
+    from(gp in GamePlayer,
+      join: g in GameRecord,
+      on: g.id == gp.game_id,
+      where: gp.user_id == ^user_id and g.finished_at >= ^from and g.finished_at < ^to,
+      select: %{
+        games: count(gp.id),
+        wins: filter(count(gp.id), gp.won),
+        chops: coalesce(sum(gp.chops), 0)
+      }
+    )
+    |> Repo.one()
+    |> Map.update!(:chops, &to_int/1)
   end
 
   @doc """

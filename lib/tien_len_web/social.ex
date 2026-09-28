@@ -26,12 +26,21 @@ defmodule TienLenWeb.Social do
       convs: [],
       online: [],
       invite: nil,
-      sent: 0
+      sent: 0,
+      # FR3: friend requests waiting for an answer (header badge); friends' ids (online tab)
+      requests: 0,
+      friend_ids: MapSet.new()
     }
 
     if connected?(socket) do
       Presence.track_page(self(), user)
-      social = %{social | convs: Chat.conversations(user.id), invite: Invites.pending(user.id)}
+
+      social = %{
+        social
+        | convs: Chat.conversations(user.id),
+          invite: Invites.pending(user.id),
+          requests: TienLen.Friends.incoming_count(user.id)
+      }
 
       socket
       |> assign(:social, social)
@@ -147,6 +156,12 @@ defmodule TienLenWeb.Social do
     {:halt, put_flash(socket, kind, text)}
   end
 
+  # FR3: the badge follows; pages showing friends get the message too
+  defp info({:friends_changed}, socket) do
+    count = TienLen.Friends.incoming_count(me(socket))
+    {:cont, put_social(socket, requests: count)}
+  end
+
   defp info(_msg, socket), do: {:cont, socket}
 
   # -- helpers ----------------------------------------------------------------------
@@ -160,9 +175,16 @@ defmodule TienLenWeb.Social do
     social = socket.assigns.social
 
     cond do
-      not social.open -> socket
-      social.tab == :online -> put_social(socket, online: online_except(me(socket)))
-      true -> put_social(socket, convs: Chat.conversations(me(socket)))
+      not social.open ->
+        socket
+
+      social.tab == :online ->
+        friends = TienLen.Friends.friend_ids(me(socket))
+        online = Enum.sort_by(online_except(me(socket)), &(not MapSet.member?(friends, &1.id)))
+        put_social(socket, online: online, friend_ids: friends)
+
+      true ->
+        put_social(socket, convs: Chat.conversations(me(socket)))
     end
   end
 
@@ -303,7 +325,10 @@ defmodule TienLenWeb.Social do
                 Không có ai khác online.
               </li>
               <li :for={u <- @social.online} class="py-1 flex items-center gap-2">
-                <span class="flex-1 truncate">{u.name}</span>
+                <span class="flex-1 truncate">
+                  <span :if={MapSet.member?(@social.friend_ids, u.id)} title="Bạn bè">⭐</span>
+                  {Text.avatar(u)} {u.name}
+                </span>
                 <span class="text-xs text-base-content/60">{place_label(u.place)}</span>
                 <button phx-click="social:open" phx-value-id={u.id} class="btn btn-xs">Nhắn</button>
               </li>

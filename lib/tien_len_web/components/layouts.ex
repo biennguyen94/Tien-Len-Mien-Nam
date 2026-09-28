@@ -40,13 +40,13 @@ defmodule TienLenWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8 border-b border-base-300">
+    <header class="navbar flex-wrap gap-y-1 px-2 sm:px-6 lg:px-8 border-b border-base-300">
       <div class="flex-1">
         <.link navigate={~p"/"} class="text-lg font-bold tracking-tight">
           ♠ Tiến Lên Miền Nam
         </.link>
       </div>
-      <div class="flex-none flex items-center gap-2">
+      <div class="flex-none flex flex-wrap items-center gap-1 sm:gap-2">
         <.link
           :if={@current_user && @current_user.role == "admin"}
           navigate={~p"/quan-tri"}
@@ -63,6 +63,21 @@ defmodule TienLenWeb.Layouts do
         </.link>
         <.link
           :if={@current_user}
+          navigate={~p"/ban-be"}
+          id="friends-link"
+          class="btn btn-ghost btn-sm"
+        >
+          Bạn bè
+          <span
+            :if={@social && @social.requests > 0}
+            id="friend-requests"
+            class="badge badge-error badge-sm"
+          >
+            {@social.requests}
+          </span>
+        </.link>
+        <.link
+          :if={@current_user}
           navigate={~p"/lich-su-coin"}
           id="my-coins"
           class="badge badge-warning badge-lg tabular-nums"
@@ -70,10 +85,16 @@ defmodule TienLenWeb.Layouts do
         >
           🪙 {TienLenWeb.Text.coins(@current_user.coins)}
         </.link>
-        <span :if={@current_user} id="current-user" class="text-sm">
-          {@current_user.display_name}
+        <.link
+          :if={@current_user}
+          navigate={~p"/nguoi-choi/#{@current_user.username}"}
+          id="current-user"
+          class="text-sm link link-hover"
+          title="Hồ sơ của bạn"
+        >
+          {TienLenWeb.Text.avatar(@current_user)} {@current_user.display_name}
           <span class="text-base-content/60">(@{@current_user.username})</span>
-        </span>
+        </.link>
         <.link
           :if={@current_user}
           id="logout"

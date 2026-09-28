@@ -16,7 +16,14 @@ defmodule TienLen.Settings do
     "daily_bonus" => 100,
     "relief" => 500,
     "relief_below" => 100,
-    "max_rooms" => 500
+    "max_rooms" => 500,
+    # daily missions (M1) and weekly season rewards (S2)
+    "mission_play_reward" => 100,
+    "mission_win_reward" => 150,
+    "mission_chop_reward" => 200,
+    "season_reward_1" => 1_000,
+    "season_reward_2" => 500,
+    "season_reward_3" => 300
   }
 
   @doc "Economy keys with their defaults (the decided values C2 and the room cap)."

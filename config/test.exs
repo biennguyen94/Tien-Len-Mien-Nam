@@ -51,3 +51,6 @@ config :phoenix,
 
 # Bots act at once in tests (B5)
 config :tien_len, :bot_delay, 0
+
+# Seasons are paid by tests explicitly (S2)
+config :tien_len, :season_payouts, false

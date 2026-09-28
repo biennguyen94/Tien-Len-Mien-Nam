@@ -43,7 +43,9 @@ defmodule TienLen.Room do
             # player ids removed by an admin: they cannot join this room again (AD6)
             banned: MapSet.new(),
             # IV2 / G11: hidden from the lobby list, joined by invite or link
-            private: false
+            private: false,
+            # P2: seat => number of chặt heo in the current / last game
+            game_chops: %{}
 
   @type player_id :: term()
   @type seat :: 0..3
@@ -126,7 +128,7 @@ defmodule TienLen.Room do
       n = Enum.find(1..@max_seats, &(not Map.has_key?(bot_numbers(room), &1)))
       name = "Máy #{n} (#{TienLen.Bot.label(level)})"
       free = Enum.find(0..(@max_seats - 1), &(not Map.has_key?(room.seats, &1)))
-      bot = %{player_id: {:bot, n}, name: name, connected: true, bot: level}
+      bot = %{player_id: {:bot, n}, name: name, connected: true, bot: level, avatar: "🤖"}
       {:ok, %{room | seats: Map.put(room.seats, free, bot)}, [{:joined, free}]}
     end
   end
@@ -157,26 +159,33 @@ defmodule TienLen.Room do
   Seats a player (first free seat) or reconnects an already seated one. New players cannot join
   during a game (R6) or when the 4 seats are taken. The first player becomes host.
   """
-  @spec join(t(), player_id(), String.t()) :: {:ok, t(), seat(), [event()]} | {:error, atom()}
-  def join(room, player_id, name) do
+  @spec join(t(), player_id(), String.t(), String.t() | nil) ::
+          {:ok, t(), seat(), [event()]} | {:error, atom()}
+  def join(room, player_id, name, avatar \\ nil) do
     case seat_of(room, player_id) do
       nil ->
         cond do
           MapSet.member?(room.banned, player_id) -> {:error, :kicked}
           room.status == :playing -> {:error, :game_in_progress}
           map_size(room.seats) >= @max_seats -> {:error, :room_full}
-          true -> seat_new_player(room, player_id, name)
+          true -> seat_new_player(room, player_id, name, avatar)
         end
 
       seat ->
-        room = update_player(room, seat, &%{&1 | connected: true})
+        room =
+          update_player(
+            room,
+            seat,
+            &Map.merge(&1, %{connected: true, avatar: avatar || Map.get(&1, :avatar)})
+          )
+
         {:ok, room, seat, [{:connected, seat}]}
     end
   end
 
-  defp seat_new_player(room, player_id, name) do
+  defp seat_new_player(room, player_id, name, avatar) do
     seat = Enum.find(0..(@max_seats - 1), &(not Map.has_key?(room.seats, &1)))
-    player = %{player_id: player_id, name: name, connected: true}
+    player = %{player_id: player_id, name: name, connected: true, avatar: avatar}
     room = %{room | seats: Map.put(room.seats, seat, player), host: room.host || seat}
     {:ok, room, seat, [{:joined, seat}]}
   end
@@ -291,7 +300,8 @@ defmodule TienLen.Room do
         | status: :playing,
           game: game,
           game_players: game_players,
-          game_no: room.game_no + 1
+          game_no: room.game_no + 1,
+          game_chops: %{}
       }
 
       events =
@@ -316,7 +326,13 @@ defmodule TienLen.Room do
     with {:ok, seat} <- fetch_seat(room, player_id),
          :ok <- if(room.status == :playing, do: :ok, else: {:error, :no_game}),
          {:ok, game, events} <- run(room.game, seat, cmd) do
-      maybe_finish(%{room | game: game}, events)
+      room = %{
+        room
+        | game: game,
+          game_chops: count_chops(room.game_chops, room.game.centre, events)
+      }
+
+      maybe_finish(room, events)
     end
   end
 
@@ -330,6 +346,22 @@ defmodule TienLen.Room do
       {:ok, _room, _events} -> :ok
       {:error, _} = error -> error
     end
+  end
+
+  # P2: a chop is an out-of-turn four-pair, or a bomb played on a 2 / in chop context
+  defp count_chops(chops, old_centre, events) do
+    Enum.reduce(events, chops, fn
+      {:chopped, seat, _combo}, acc ->
+        Map.update(acc, seat, 1, &(&1 + 1))
+
+      {:played, seat, combo}, acc ->
+        if TienLen.Combination.bomb?(combo) and TienLen.Rules.chop_target?(old_centre),
+          do: Map.update(acc, seat, 1, &(&1 + 1)),
+          else: acc
+
+      _event, acc ->
+        acc
+    end)
   end
 
   defp run(game, seat, {:play, cards}), do: Game.play(game, seat, cards)
@@ -379,7 +411,9 @@ defmodule TienLen.Room do
           seat: seat,
           place: place,
           won: place == 1,
-          removed: seat in game.removed
+          removed: seat in game.removed,
+          chops: Map.get(room.game_chops, seat, 0),
+          instant: Enum.any?(game.instant_winners, &(elem(&1, 0) == seat))
         }
       end
 
@@ -420,7 +454,8 @@ defmodule TienLen.Room do
             name: p.name,
             connected: p.connected,
             host: seat == room.host,
-            bot: Map.get(p, :bot)
+            bot: Map.get(p, :bot),
+            avatar: Map.get(p, :avatar)
           }
         end),
       game: room.game && Game.view(room.game, me)

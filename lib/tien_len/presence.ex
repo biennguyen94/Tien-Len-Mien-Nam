@@ -20,21 +20,38 @@ defmodule TienLen.Presence do
 
   @doc "Tracks the page process `pid` of `user`."
   def track_page(pid, user, place \\ "other", room_id \\ nil) do
-    track(pid, @topic, key(user.id), %{name: user.display_name, place: place, room_id: room_id})
+    track(pid, @topic, key(user.id), meta(user, place, room_id))
   end
 
   @doc "Moves an already tracked page to another place."
   def move(pid, user, place, room_id \\ nil) do
-    update(pid, @topic, key(user.id), %{name: user.display_name, place: place, room_id: room_id})
+    update(pid, @topic, key(user.id), meta(user, place, room_id))
   end
 
-  @doc "Online players as `[%{id, name, place, room_id}]`, sorted by name."
+  defp meta(user, place, room_id),
+    do: %{
+      name: user.display_name,
+      username: Map.get(user, :username),
+      avatar: Map.get(user, :avatar),
+      place: place,
+      room_id: room_id
+    }
+
+  @doc "Online players as `[%{id, name, username, avatar, place, room_id}]`, sorted by name."
   def online_users do
     @topic
     |> list()
     |> Enum.map(fn {key, %{metas: metas}} ->
       meta = Enum.max_by(metas, &Map.get(@rank, &1.place, 0))
-      %{id: String.to_integer(key), name: meta.name, place: meta.place, room_id: meta.room_id}
+
+      %{
+        id: String.to_integer(key),
+        name: meta.name,
+        username: Map.get(meta, :username),
+        avatar: Map.get(meta, :avatar),
+        place: meta.place,
+        room_id: meta.room_id
+      }
     end)
     |> Enum.sort_by(&{String.downcase(&1.name), &1.id})
   end
@@ -47,7 +64,15 @@ defmodule TienLen.Presence do
 
       %{metas: metas} ->
         meta = Enum.max_by(metas, &Map.get(@rank, &1.place, 0))
-        %{id: user_id, name: meta.name, place: meta.place, room_id: meta.room_id}
+
+        %{
+          id: user_id,
+          name: meta.name,
+          username: Map.get(meta, :username),
+          avatar: Map.get(meta, :avatar),
+          place: meta.place,
+          room_id: meta.room_id
+        }
     end
   end
 

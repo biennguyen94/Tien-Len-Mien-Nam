@@ -51,13 +51,28 @@ defmodule TienLen.Invites do
     with {:ok, _} <- GenServer.call(__MODULE__, {:take, to_id, invite_id, :declined}), do: :ok
   end
 
-  @doc "Players the seated `user_id` could invite: `[%{id, name, invites_off}]` (G9)."
+  @doc """
+  Players the seated `user_id` could invite: `[%{id, name, avatar, invites_off, friend}]` (G9),
+  friends first (FR4).
+  """
   def candidates(user_id) do
     users =
       Enum.filter(Presence.online_users(), &(&1.id != user_id and &1.place in ["lobby", "other"]))
 
     off = users |> Enum.map(& &1.id) |> Accounts.invites_off() |> MapSet.new()
-    Enum.map(users, &%{id: &1.id, name: &1.name, invites_off: MapSet.member?(off, &1.id)})
+    friends = TienLen.Friends.friend_ids(user_id)
+
+    users
+    |> Enum.map(
+      &%{
+        id: &1.id,
+        name: &1.name,
+        avatar: &1.avatar,
+        invites_off: MapSet.member?(off, &1.id),
+        friend: MapSet.member?(friends, &1.id)
+      }
+    )
+    |> Enum.sort_by(&(not &1.friend))
   end
 
   # -- checks -------------------------------------------------------------------------

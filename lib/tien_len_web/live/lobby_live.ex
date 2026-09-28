@@ -25,6 +25,8 @@ defmodule TienLenWeb.LobbyLive do
       Chat.subscribe_lobby()
       Presence.subscribe()
       Presence.move(self(), user, "lobby")
+      # M1: mission progress follows recorded games
+      TienLen.Stats.subscribe()
     end
 
     login_username = Phoenix.Flash.get(socket.assigns.flash, :login_username)
@@ -45,8 +47,14 @@ defmodule TienLenWeb.LobbyLive do
      |> assign(:login_form, to_form(%{"username" => login_username}, as: "user", id: "login"))
      |> assign(:name_form, to_form(%{"display_name" => user && user.display_name}, as: "profile"))
      |> assign(:room_form, to_form(%{"stake" => "0"}, as: "room"))
-     |> assign_claimable()}
+     |> assign_claimable()
+     |> assign_missions()}
   end
+
+  defp assign_missions(%{assigns: %{current_user: %{id: id}}} = socket),
+    do: assign(socket, :missions, TienLen.Missions.today(id))
+
+  defp assign_missions(socket), do: assign(socket, :missions, [])
 
   # What the player may claim today (E8); re-read after every claim and balance change.
   defp assign_claimable(%{assigns: %{current_user: %{id: id}}} = socket),
@@ -178,6 +186,21 @@ defmodule TienLenWeb.LobbyLive do
     end
   end
 
+  # M1: daily mission rewards (the server checks progress and pays once)
+  def handle_event(
+        "claim_mission",
+        %{"key" => key},
+        %{assigns: %{current_user: %{id: id}}} = socket
+      ) do
+    case TienLen.Missions.claim(id, key) do
+      {:ok, _balance} ->
+        {:noreply, socket |> put_flash(:info, "Đã nhận thưởng nhiệm vụ") |> assign_missions()}
+
+      {:error, reason} ->
+        {:noreply, socket |> put_flash(:error, Text.reason(reason)) |> assign_missions()}
+    end
+  end
+
   # G9: "Không nhận lời mời"
   def handle_event("toggle_invites", _params, %{assigns: %{current_user: %{} = user}} = socket) do
     {:ok, user} = Accounts.set_accept_invites(user, !user.accept_invites)
@@ -220,6 +243,8 @@ defmodule TienLenWeb.LobbyLive do
 
   def handle_info({:lobby_chat_deleted, id}, socket),
     do: {:noreply, update(socket, :lobby_chat, &Enum.reject(&1, fn m -> m.id == id end))}
+
+  def handle_info({:stats_updated}, socket), do: {:noreply, assign_missions(socket)}
 
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket),
     do: {:noreply, assign(socket, :online, Presence.online_users())}
@@ -405,6 +430,33 @@ defmodule TienLenWeb.LobbyLive do
           <.link navigate={~p"/lich-su-coin"} class="link text-sm">Lịch sử coin</.link>
         </div>
 
+        <section id="missions" class="card bg-base-200 p-4 space-y-2">
+          <h2 class="font-semibold">Nhiệm vụ hôm nay</h2>
+          <ul class="space-y-2">
+            <li :for={m <- @missions} id={"mission-#{m.key}"} class="flex items-center gap-2">
+              <span class="flex-1">
+                {m.title}
+                <span class="text-xs text-base-content/60">(+{Text.coins(m.reward)} coin)</span>
+              </span>
+              <progress class="progress progress-primary w-20" value={m.progress} max={m.goal} />
+              <span class="text-sm tabular-nums w-10 text-right">{m.progress}/{m.goal}</span>
+              <button
+                :if={m.done and not m.claimed}
+                id={"claim-#{m.key}"}
+                phx-click="claim_mission"
+                phx-value-key={m.key}
+                class="btn btn-xs btn-success"
+              >
+                Nhận
+              </button>
+              <span :if={m.claimed} class="text-success text-sm">✓ Đã nhận</span>
+            </li>
+          </ul>
+          <p class="text-xs text-base-content/60">
+            Tính các ván được ghi trong ngày (giờ Việt Nam); ván có máy chơi không tính.
+          </p>
+        </section>
+
         <.form for={@room_form} id="create-room-form" phx-submit="create" class="flex items-end gap-2">
           <div class="w-44">
             <.input
@@ -477,7 +529,12 @@ defmodule TienLenWeb.LobbyLive do
             <h2 class="font-semibold text-sm">Đang online ({length(@online)})</h2>
             <ul class="max-h-64 overflow-y-auto divide-y divide-base-300 text-sm">
               <li :for={u <- @online} id={"online-#{u.id}"} class="py-1 flex items-center gap-2">
-                <span class="flex-1 truncate">{u.name}</span>
+                <.link
+                  navigate={~p"/nguoi-choi/#{u.username || ""}"}
+                  class="flex-1 truncate link link-hover"
+                >
+                  {Text.avatar(u)} {u.name}
+                </.link>
                 <span class="text-xs text-base-content/60">
                   {TienLenWeb.Social.place_label(u.place)}
                 </span>

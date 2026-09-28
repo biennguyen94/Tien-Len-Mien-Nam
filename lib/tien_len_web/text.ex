@@ -67,7 +67,17 @@ defmodule TienLenWeb.Text do
     cannot_mute_self: "Không thể tự cấm chat mình",
     not_muted: "Người này không bị cấm chat",
     invalid_duration: "Thời hạn không hợp lệ",
-    bots_need_free_room: "Máy chơi chỉ có ở phòng chơi vui (cược 0)"
+    bots_need_free_room: "Máy chơi chỉ có ở phòng chơi vui (cược 0)",
+    cannot_friend_self: "Không thể kết bạn với chính mình",
+    already_friends: "Hai bạn đã là bạn bè",
+    request_pending: "Đã gửi lời mời kết bạn, đang chờ trả lời",
+    too_many_friends: "Danh sách bạn bè đã đầy (tối đa 200)",
+    too_many_requests: "Bạn đang có quá nhiều lời mời kết bạn chưa được trả lời (tối đa 20)",
+    friend_too_fast: "Bạn gửi lời mời kết bạn quá nhanh, chờ một chút",
+    mission_not_done: "Nhiệm vụ chưa hoàn thành",
+    unknown_mission: "Không có nhiệm vụ này",
+    invalid_avatar: "Ảnh đại diện không hợp lệ",
+    season_not_over: "Mùa giải chưa kết thúc"
   }
 
   @types %{
@@ -115,8 +125,16 @@ defmodule TienLenWeb.Text do
     "instant_win" => "Tới trắng",
     "chop" => "Chặt heo",
     "thoi" => "Thối heo",
-    "admin_adjust" => "Quản trị viên điều chỉnh"
+    "admin_adjust" => "Quản trị viên điều chỉnh",
+    "mission" => "Nhiệm vụ ngày",
+    "season_reward" => "Thưởng mùa giải"
   }
+
+  @doc "A player's avatar (P3), or the default face."
+  def avatar(nil), do: "🙂"
+  def avatar(%{avatar: avatar}), do: avatar(avatar)
+  def avatar(avatar) when is_binary(avatar), do: avatar
+  def avatar(_), do: "🙂"
 
   @doc "Label of a ledger reason."
   def coin_reason(reason), do: Map.get(@coin_reasons, reason, reason)

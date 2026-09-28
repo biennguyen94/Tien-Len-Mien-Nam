@@ -40,6 +40,8 @@ defmodule TienLenWeb.TableLive do
       |> assign(:place, nil)
       # H1 hints (cycled by the button) and the hand order (M2), both local to this page
       |> assign(:hint_i, 0)
+      # R1: seat => {emoji, shown until (ms)}
+      |> assign(:reactions, %{})
       |> assign(:sort, :rank)
 
     cond do
@@ -49,7 +51,12 @@ defmodule TienLenWeb.TableLive do
       true ->
         RoomServer.subscribe(id)
 
-        case Lobby.join_room(id, socket.assigns.player_id, socket.assigns.player_name) do
+        case Lobby.join_room(
+               id,
+               socket.assigns.player_id,
+               socket.assigns.player_name,
+               socket.assigns.current_user.avatar
+             ) do
           {:ok, _seat} ->
             :timer.send_interval(1_000, :tick)
 
@@ -165,6 +172,15 @@ defmodule TienLenWeb.TableLive do
     end
   end
 
+  # R1: an emoji on my seat for everyone (3 per 5 s; ignored when too fast)
+  def handle_event("react", %{"emoji" => emoji}, socket) do
+    if TienLen.RateLimit.hit({:react, socket.assigns.player_id}, 3, 5_000) == :ok do
+      RoomServer.react(socket.assigns.room_id, socket.assigns.player_id, emoji)
+    end
+
+    {:noreply, socket}
+  end
+
   # M2: hand order, by rank (default) or by suit
   def handle_event("sort", _params, socket),
     do:
@@ -217,7 +233,18 @@ defmodule TienLenWeb.TableLive do
   def handle_info({:room_chat_deleted, _id, msg_id}, socket),
     do: {:noreply, update(socket, :chat, &Enum.reject(&1, fn m -> m.id == msg_id end))}
 
-  def handle_info(:tick, socket), do: {:noreply, assign(socket, :now, now())}
+  def handle_info({:reaction, _id, seat, emoji}, socket),
+    do: {:noreply, update(socket, :reactions, &Map.put(&1, seat, {emoji, now() + 3_000}))}
+
+  def handle_info(:tick, socket) do
+    t = now()
+
+    {:noreply,
+     socket
+     |> assign(:now, t)
+     |> update(:reactions, fn r -> Map.reject(r, fn {_seat, {_e, until}} -> until <= t end) end)}
+  end
+
   def handle_info(_unexpected, socket), do: {:noreply, socket}
 
   defp load(socket) do
@@ -371,13 +398,13 @@ defmodule TienLenWeb.TableLive do
 
       <div id="table" class="grid grid-cols-3 grid-rows-[auto_1fr_auto] gap-3 items-center">
         <div class="col-start-2 row-start-1 justify-self-center">
-          <.seat view={@view} seat={seat_at(@view, 2)} secs={@secs} />
+          <.seat view={@view} seat={seat_at(@view, 2)} secs={@secs} reactions={@reactions} />
         </div>
         <div class="col-start-1 row-start-2 justify-self-start">
-          <.seat view={@view} seat={seat_at(@view, 3)} secs={@secs} />
+          <.seat view={@view} seat={seat_at(@view, 3)} secs={@secs} reactions={@reactions} />
         </div>
         <div class="col-start-3 row-start-2 justify-self-end">
-          <.seat view={@view} seat={seat_at(@view, 1)} secs={@secs} />
+          <.seat view={@view} seat={seat_at(@view, 1)} secs={@secs} reactions={@reactions} />
         </div>
 
         <div
@@ -388,7 +415,7 @@ defmodule TienLenWeb.TableLive do
         </div>
 
         <div class="col-span-3 row-start-3 justify-self-center">
-          <.seat view={@view} seat={@view.me} secs={@secs} />
+          <.seat view={@view} seat={@view.me} secs={@secs} reactions={@reactions} />
         </div>
       </div>
 
@@ -456,6 +483,18 @@ defmodule TienLenWeb.TableLive do
         </div>
       </section>
 
+      <div id="reactions" class="flex justify-center gap-1">
+        <button
+          :for={e <- TienLen.Chat.reactions()}
+          phx-click="react"
+          phx-value-emoji={e}
+          class="btn btn-ghost btn-sm text-xl"
+          title="Biểu cảm"
+        >
+          {e}
+        </button>
+      </div>
+
       <.chat_box
         id="room-chat"
         title="Chat phòng"
@@ -472,6 +511,7 @@ defmodule TienLenWeb.TableLive do
   attr :view, :map, required: true
   attr :seat, :integer, required: true
   attr :secs, :integer, default: nil
+  attr :reactions, :map, default: %{}
 
   defp seat(assigns) do
     assigns =
@@ -489,10 +529,17 @@ defmodule TienLenWeb.TableLive do
       ]}
     >
       <p :if={@player == nil} class="text-base-content/50">Trống</p>
-      <div :if={@player}>
+      <div :if={@player} class="relative">
+        <span
+          :if={@reactions[@seat]}
+          id={"reaction-#{@seat}"}
+          class="absolute -top-6 left-1/2 -translate-x-1/2 text-3xl animate-bounce"
+        >
+          {elem(@reactions[@seat], 0)}
+        </span>
         <p class="font-semibold truncate max-w-40">
           <span :if={@player.host} title="Chủ phòng">👑</span>
-          {@player.name}
+          {TienLenWeb.Text.avatar(@player)} {@player.name}
           <span :if={@seat == @view.me} class="text-xs text-base-content/60">(bạn)</span>
           <span :if={@player.bot} class="badge badge-info badge-xs" title="Máy chơi">🤖</span>
           <span :if={!@player.connected} class="badge badge-ghost badge-xs">mất kết nối</span>
@@ -667,7 +714,9 @@ defmodule TienLenWeb.TableLive do
           Không có ai đang rảnh để mời. Hãy gửi link phòng (nút "Chép link").
         </li>
         <li :for={c <- @candidates} id={"candidate-#{c.id}"} class="p-2 flex items-center gap-2">
-          <span class={["flex-1 truncate", c.invites_off && "text-base-content/40"]}>{c.name}</span>
+          <span class={["flex-1 truncate", c.invites_off && "text-base-content/40"]}>
+            <span :if={c.friend} title="Bạn bè">⭐</span> {Text.avatar(c)} {c.name}
+          </span>
           <span :if={c.invites_off} class="text-xs text-base-content/50">không nhận lời mời</span>
           <button
             :if={!c.invites_off}

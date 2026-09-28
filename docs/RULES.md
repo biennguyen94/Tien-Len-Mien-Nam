@@ -253,6 +253,17 @@ Coins are virtual and only exist inside the game (C1). **All amounts are compute
 - Bots play by these rules like any player (same validation, same turn timer as a fallback), see only their own hand, never become host, and do not keep a room open without humans.
 - Games with a bot move no coins (stake 0) and are **not recorded** in the leaderboard or history.
 
+## 17b. Missions and seasons (M1–M4, S1–S4)
+
+- **Daily missions** (Vietnam day):
+  - play 5 recorded games: +100;
+  - finish 1st in 2: +150;
+  - chặt heo once: +200.
+
+  Each mission is claimed once per day. A chop is an out-of-turn four-pair, or a bomb played on a 2 or in chop context.
+- **Weekly season**: Monday 00:00 to Sunday 24:00 Vietnam time, ranked by 1st places in that week's recorded games (ties as in the leaderboard). The top 3 with at least one win get 1,000 / 500 / 300 coins after the week ends.
+- Games with bots are not recorded, so they count for neither. All amounts are admin settings.
+
 ## 18. Rule ↔ decision map
 
 | Rule | Decisions |

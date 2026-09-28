@@ -147,8 +147,14 @@ defmodule TienLen.InvitesTest do
       assert Enum.any?(Lobby.list_rooms(), &(&1.id == id))
       assert Enum.any?(Admin.rooms(), &(&1.id == id))
 
-      :ok = RoomServer.start_game(id, a.id)
-      assert RoomServer.set_private(id, a.id, false) == {:error, :game_in_progress}
+      # a fixed deal: a random one could be an instant win that ends the game at once
+      hands = %{0 => "3S 9H", 1 => "4S 9C"}
+      deal = {:hands, Map.new(hands, fn {s, c} -> {s, TienLen.Card.parse_many!(c)} end)}
+      id2 = room!(deals: [deal])
+      {:ok, _} = RoomServer.join(id2, a.id, "An")
+      {:ok, _} = RoomServer.join(id2, b.id, "Binh")
+      :ok = RoomServer.start_game(id2, a.id)
+      assert RoomServer.set_private(id2, a.id, false) == {:error, :game_in_progress}
     end
 
     test "created private; still joinable by id (the link)" do

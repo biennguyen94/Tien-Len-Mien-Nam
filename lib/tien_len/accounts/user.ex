@@ -25,6 +25,8 @@ defmodule TienLen.Accounts.User do
     # G9: the player's own setting; G12: set only by TienLen.Admin
     field :accept_invites, :boolean, default: true
     field :muted_until, :utc_datetime
+    # P3: one of TienLen.Accounts.avatars/0, chosen by the player
+    field :avatar, :string
 
     timestamps type: :utc_datetime
   end

@@ -96,7 +96,13 @@ defmodule TienLen.Economy do
     from(u in User,
       order_by: [desc: u.coins, asc: u.username],
       limit: ^limit,
-      select: %{user_id: u.id, username: u.username, display_name: u.display_name, coins: u.coins}
+      select: %{
+        user_id: u.id,
+        username: u.username,
+        display_name: u.display_name,
+        avatar: u.avatar,
+        coins: u.coins
+      }
     )
     |> Repo.all()
     |> Enum.with_index(1)
@@ -150,7 +156,26 @@ defmodule TienLen.Economy do
     end)
   end
 
-  defp claim(user_id, key, amount, reason, check) do
+  @doc """
+  Grants `amount` coins once per `key` (missions M1, season rewards S2): the key makes it
+  idempotent. `{:ok, balance}` or `{:error, :already_claimed | :not_found}`.
+  """
+  def grant(user_id, key, amount, reason, ref \\ nil) when is_integer(amount) and amount > 0,
+    do: claim(user_id, key, amount, reason, fn _user -> {:ok, []} end, ref)
+
+  @doc "True if the idempotency `key` was used already."
+  def settled?(key) do
+    Repo.exists?(from s in "coin_settlements", where: s.key == ^key)
+  end
+
+  @doc "UTC bounds `{from, to}` of a Vietnam day (UTC+7)."
+  def vn_day_bounds(%Date{} = date) do
+    {:ok, start} = DateTime.new(date, ~T[00:00:00], "Etc/UTC")
+    start = DateTime.add(start, -@vn_offset, :second)
+    {start, DateTime.add(start, 86_400, :second)}
+  end
+
+  defp claim(user_id, key, amount, reason, check, ref \\ nil) do
     result =
       Repo.transaction(fn ->
         with {:ok, user} <- lock_user(user_id),
@@ -163,7 +188,8 @@ defmodule TienLen.Economy do
             user_id: user_id,
             amount: amount,
             balance_after: balance,
-            reason: reason
+            reason: reason,
+            ref: ref
           })
 
           balance

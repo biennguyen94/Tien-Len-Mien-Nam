@@ -9,7 +9,13 @@ defmodule TienLenWeb.Admin.SettingsLive do
     {"daily_bonus", "Thưởng ngày"},
     {"relief", "Cứu trợ"},
     {"relief_below", "Cứu trợ khi dưới"},
-    {"max_rooms", "Số phòng tối đa"}
+    {"max_rooms", "Số phòng tối đa"},
+    {"mission_play_reward", "Nhiệm vụ: chơi 5 ván"},
+    {"mission_win_reward", "Nhiệm vụ: về nhất 2 ván"},
+    {"mission_chop_reward", "Nhiệm vụ: chặt heo 1 lần"},
+    {"season_reward_1", "Thưởng tuần: hạng 1"},
+    {"season_reward_2", "Thưởng tuần: hạng 2"},
+    {"season_reward_3", "Thưởng tuần: hạng 3"}
   ]
 
   @impl true

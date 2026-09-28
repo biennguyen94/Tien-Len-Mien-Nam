@@ -107,6 +107,11 @@ docker compose ps                                                               
 
 ## Verification
 
+### Phases 32–36 (2026-09-28), profile, friends, missions, seasons, reactions
+
+- The `add_social_features` migration ran at start. The season scheduler pays last week's top 3 within an hour of any start (idempotent).
+- Via `rpc` with 2 temporary accounts: friend request + accept, avatar, missions; last week's payout `{:ok, []}`. Accounts deleted.
+
 ### Phases 29–31 (2026-09-28), bots, hints, phone layout
 
 - Redeployed (no migration). Via `rpc`: a human plus 3 bots played a game to the end; a 5th seat was refused; no game was recorded.

@@ -1,12 +1,13 @@
 defmodule TienLenWeb.LeaderboardLive do
   @moduledoc """
-  Leaderboards, updated live (Y8): by number of 1st places (A1, default tab) and by coins
-  ("Giàu nhất", `?tab=giau`, T19).
+  Leaderboards, updated live (Y8): by number of 1st places (A1, default tab), by coins
+  ("Giàu nhất", `?tab=giau`, T19), and the weekly season ("Tuần này" `?tab=tuan`, "Tuần
+  trước" `?tab=tuan-truoc`, S1–S3).
   """
 
   use TienLenWeb, :live_view
 
-  alias TienLen.{Economy, Stats}
+  alias TienLen.{Economy, Seasons, Stats}
   alias TienLenWeb.Text
 
   @impl true
@@ -21,8 +22,28 @@ defmodule TienLenWeb.LeaderboardLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    tab = if params["tab"] == "giau", do: :richest, else: :wins
+    tab =
+      case params["tab"] do
+        "giau" -> :richest
+        "tuan" -> :week
+        "tuan-truoc" -> :last_week
+        _ -> :wins
+      end
+
     {:noreply, socket |> assign(:tab, tab) |> load()}
+  end
+
+  defp load(%{assigns: %{tab: tab}} = socket) when tab in [:week, :last_week] do
+    monday = Seasons.week_start()
+    monday = if tab == :week, do: monday, else: Date.add(monday, -7)
+
+    socket
+    |> assign(:monday, monday)
+    |> assign(:rows, Seasons.standings(monday))
+    |> assign(:rewards, Seasons.rewards())
+    |> assign(:paid, if(tab == :last_week, do: Seasons.paid(monday), else: []))
+    |> assign(:me, nil)
+    |> assign(:richest, [])
   end
 
   defp load(socket) do
@@ -62,6 +83,22 @@ defmodule TienLenWeb.LeaderboardLive do
           Về nhất
         </.link>
         <.link
+          patch={~p"/bang-xep-hang?tab=tuan"}
+          id="tab-week"
+          role="tab"
+          class={["tab", @tab == :week && "tab-active"]}
+        >
+          Tuần này
+        </.link>
+        <.link
+          patch={~p"/bang-xep-hang?tab=tuan-truoc"}
+          id="tab-last-week"
+          role="tab"
+          class={["tab", @tab == :last_week && "tab-active"]}
+        >
+          Tuần trước
+        </.link>
+        <.link
           patch={~p"/bang-xep-hang?tab=giau"}
           id="tab-richest"
           role="tab"
@@ -86,22 +123,45 @@ defmodule TienLenWeb.LeaderboardLive do
             class={row.user_id == @current_user.id && "font-bold bg-primary/10"}
           >
             <td>{row.rank}</td>
-            <td>
-              {row.display_name} <span class="text-xs text-base-content/60">@{row.username}</span>
-            </td>
+            <td><.player_link row={row} /></td>
             <td class="text-right tabular-nums">🪙 {Text.coins(row.coins)}</td>
           </tr>
         </tbody>
       </table>
 
-      <div :if={@tab == :wins} class="space-y-4">
-        <p class="text-sm text-base-content/70">Xếp theo số lần về nhất.</p>
+      <div
+        :if={@tab in [:week, :last_week]}
+        id="season"
+        class="card bg-base-200 p-3 space-y-1 text-sm"
+      >
+        <p>
+          Mùa tuần <strong>{Seasons.label(@monday)}</strong>
+          (thứ Hai 00:00 – Chủ nhật 24:00, giờ Việt Nam). Xếp theo số lần về nhất trong tuần.
+        </p>
+        <p>
+          Thưởng cuối tuần cho 3 hạng đầu (cần ít nhất 1 lần về nhất):
+          🥇 {Text.coins(Enum.at(@rewards, 0))} · 🥈 {Text.coins(Enum.at(@rewards, 1))} · 🥉 {Text.coins(
+            Enum.at(@rewards, 2)
+          )} coin.
+        </p>
+        <ul :if={@tab == :last_week and @paid != []} id="season-paid">
+          <li :for={p <- @paid}>
+            Đã trao: <strong>{p.display_name}</strong> +{Text.coins(p.amount)} coin
+          </li>
+        </ul>
+        <p :if={@tab == :last_week and @paid == []} class="text-base-content/60">
+          Chưa có phần thưởng nào được trao cho tuần này.
+        </p>
+      </div>
 
-        <p :if={@me} id="my-standing" class="card bg-base-200 p-3">
+      <div :if={@tab != :richest} class="space-y-4">
+        <p :if={@tab == :wins} class="text-sm text-base-content/70">Xếp theo số lần về nhất.</p>
+
+        <p :if={@me && @tab == :wins} id="my-standing" class="card bg-base-200 p-3">
           Bạn đang hạng <strong>{@me.rank}</strong>: về nhất {@me.wins} lần / {@me.games} ván
           ({percent(@me.win_rate)}).
         </p>
-        <p :if={!@me} id="my-standing" class="text-base-content/70">
+        <p :if={!@me && @tab == :wins} id="my-standing" class="text-base-content/70">
           Bạn chưa chơi xong ván nào.
         </p>
 
@@ -124,10 +184,7 @@ defmodule TienLenWeb.LeaderboardLive do
               class={row.user_id == @current_user.id && "font-bold bg-primary/10"}
             >
               <td>{row.rank}</td>
-              <td>
-                {row.display_name}
-                <span class="text-xs text-base-content/60">@{row.username}</span>
-              </td>
+              <td><.player_link row={row} /></td>
               <td class="text-right tabular-nums">{row.wins}</td>
               <td class="text-right tabular-nums">{row.games}</td>
               <td class="text-right tabular-nums">{percent(row.win_rate)}</td>
@@ -136,6 +193,17 @@ defmodule TienLenWeb.LeaderboardLive do
         </table>
       </div>
     </Layouts.app>
+    """
+  end
+
+  attr :row, :map, required: true
+
+  defp player_link(assigns) do
+    ~H"""
+    <.link navigate={~p"/nguoi-choi/#{@row.username}"} class="link link-hover">
+      {Text.avatar(@row[:avatar])} {@row.display_name}
+    </.link>
+    <span class="text-xs text-base-content/60">@{@row.username}</span>
     """
   end
 end

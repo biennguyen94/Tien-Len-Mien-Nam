@@ -31,6 +31,12 @@ defmodule TienLen.Application do
       TienLenWeb.Endpoint
     ]
 
+    # weekly season rewards (S2), off in tests
+    children =
+      if Application.get_env(:tien_len, :season_payouts, true),
+        do: List.insert_at(children, -2, TienLen.Seasons.Scheduler),
+        else: children
+
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: TienLen.Supervisor]

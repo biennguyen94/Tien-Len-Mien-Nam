@@ -75,4 +75,44 @@ defmodule TienLen.Accounts do
   def invites_off(ids) do
     Repo.all(from u in User, where: u.id in ^ids and not u.accept_invites, select: u.id)
   end
+
+  # P3: a fixed set of avatars (no uploads)
+  @avatars ~w(🐯 🐉 🦊 🐼 🐸 🐙 🦁 🐵 🐧 🐢 🦄 🐝 🐬 🦉 🐺 🐨 🐮 🐷 🐰 🐻)
+
+  @doc "Avatars a player can choose (P3)."
+  def avatars, do: @avatars
+
+  @doc "Sets the player's avatar; only one of `avatars/0`."
+  def set_avatar(%User{} = user, avatar) do
+    if avatar in @avatars,
+      do: user |> Ecto.Changeset.change(avatar: avatar) |> Repo.update(),
+      else: {:error, :invalid_avatar}
+  end
+
+  @doc "A user by username (case-insensitive), or `nil`."
+  def get_by_username(username) when is_binary(username),
+    do: Repo.get_by(User, username: String.downcase(String.trim(username)))
+
+  def get_by_username(_), do: nil
+
+  @doc "Unlocked users whose username or display name contains `q` (at most 10)."
+  def search(q) when is_binary(q) do
+    q = String.trim(q)
+
+    if String.length(q) < 2 do
+      []
+    else
+      like = "%" <> String.replace(q, ~r/[\\%_]/, &("\\" <> &1)) <> "%"
+
+      Repo.all(
+        from u in User,
+          where:
+            is_nil(u.locked_at) and (ilike(u.username, ^like) or ilike(u.display_name, ^like)),
+          order_by: u.username,
+          limit: 10
+      )
+    end
+  end
+
+  def search(_), do: []
 end

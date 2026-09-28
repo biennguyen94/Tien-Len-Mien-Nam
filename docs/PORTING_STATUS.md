@@ -35,6 +35,11 @@ Last updated: 2026-09-28
 | 29 | Hints (Gợi ý) | **DONE** (2026-09-28) |
 | 30 | Bots | **DONE** (2026-09-28) |
 | 31 | Phone layout, hand order; deploy | **DONE** (2026-09-28) |
+| 32 | Profile, avatars, per-player game facts | **DONE** (2026-09-28) |
+| 33 | Friends | **DONE** (2026-09-28) |
+| 34 | Daily missions | **DONE** (2026-09-28) |
+| 35 | Weekly seasons | **DONE** (2026-09-28) |
+| 36 | Emoji reactions; deploy | **DONE** (2026-09-28) |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -251,6 +256,31 @@ The owner asked for #1 bots, #2 phone layout and #3 hints and said not to ask ("
 | H1 | **"Gợi ý"** button: each click selects the next legal play, weakest first; out of turn it offers four-pair chops. Hints are computed on the server and validated by `TienLen.Game` (CLAUDE.md rule 2). |
 | M1 | **Phone layout**: the hand fits one row on a phone (overlapping cards); compact seats; the action bar sticks to the bottom of the screen; the message button moves above it. |
 | M2 | **Hand order**: "Xếp theo chất" / "Xếp theo số" (display only, per page). |
+
+### Batch 11 — profile, friends, missions, seasons, reactions (2026-09-28)
+
+The owner asked for #4–#8 "theo cách bạn thấy hợp lý nhất" without being asked. The decisions below were **taken by Claude** and can be overridden.
+
+| # | Decision (Claude, on the owner's instruction) |
+|---|---|
+| P1 | **Profile page** `/nguoi-choi/<username>` for every logged-in player: avatar, name, join date, online state, coins, numbers, all-time and weekly rank, friend button, "Nhắn tin". |
+| P2 | Numbers come from **recorded games** only: games, 1st places, win rate, average place, **chặt heo** count, **tới trắng** count, net coins from games, biggest win in one game. Each recorded player now stores `chops`, `coins`, `instant`. A chop is an out-of-turn four-pair, or a bomb played on a 2 or in chop context. **Games recorded before this change count 0 for these.** |
+| P3 | **Avatars**: 20 fixed emoji, chosen on your own profile; no uploads. Shown in the header, seats, online lists, leaderboards. |
+| P4 | Profiles of locked accounts are not shown. |
+| FR1 | **Friends**: a request, then accepted by the other. Asking someone who already asked you accepts. Decline, cancel, remove (either side). |
+| FR2 | Limits: 200 friends, 20 unanswered requests, 10 requests per minute. |
+| FR3 | "Bạn bè" page: requests, friends with online state and "Nhắn", pending requests, search by name. The header badge counts incoming requests, live. |
+| FR4 | Friends come first (⭐) in the table's invite list and the online tab of the message panel. |
+| FR5 | No friends-only features beyond that (no private visibility rules). |
+| M1 | **Daily missions**, the same three every Vietnam day:<br>• play 5 games (+100);<br>• finish 1st in 2 games (+150);<br>• chặt heo once (+200). |
+| M2 | Progress is counted from that day's recorded games, so games with bots never count (B3). |
+| M3 | The reward is claimed with a button, once per mission per day (idempotency key), ledger reason `mission`. |
+| M4 | Rewards are admin settings (`mission_*_reward`). |
+| S1 | **Weekly season**: Monday 00:00 to Sunday 24:00 Vietnam time; ranked like the leaderboard (1st places) over that week's games. Tabs "Tuần này" / "Tuần trước". |
+| S2 | At the end of a week, the **top 3 with at least 1 win** get **1,000 / 500 / 300** coins (settings `season_reward_1..3`). A scheduler checks every hour; the payout is idempotent per week and rank. |
+| S3 | Ledger reason `season_reward`, ref "Tuần dd/mm – dd/mm"; "Tuần trước" lists what was paid. |
+| S4 | No reset of the all-time leaderboard; the week is a separate view. |
+| R1 | **Emoji reactions** at the table (😂 👏 😮 😡 👍 🔥): seated players only, shown on their seat for 3 s, 3 per 5 s, never stored. |
 
 ### Project decisions
 
@@ -1086,6 +1116,49 @@ The owner asked for #1 bots, #2 phone layout and #3 hints and said not to ask ("
 
 - The phone layout on a real phone (LiveView tests check the markup, not the rendering).
 - The bots' playing strength is not measured. "Thường" is a simple heuristic, not a strong player.
+
+## Phases 32–36 results — profile, friends, missions, seasons, reactions (2026-09-28)
+
+### Delivered
+
+- Migration `add_social_features`: `users.avatar`; `game_players.chops/coins/instant`; `friendships` (unique pair, not self, status check).
+- **P:**
+  - `Room.game_chops` counts chops per seat; `Room.result/1` carries `chops` and `instant`;
+  - the room server now settles coins **before** recording, so each player's net `coins` is stored;
+  - `Stats.profile/1`, `Stats.counts/2`, `Stats.leaderboard/2` with a period;
+  - `Accounts.avatars/0`, `set_avatar/2`, `get_by_username/1`, `search/1`;
+  - `ProfileLive` (`/nguoi-choi/:username`); avatars in the header, seats, presence, leaderboards, invite list.
+- **FR:** `TienLen.Friends` (+ `Friendship` schema), `FriendsLive` (`/ban-be`), a header badge via `TienLenWeb.Social` (`{:friends_changed}` on the user topic), friends first in invite / online lists.
+- **M:** `TienLen.Missions`, `Economy.grant/5` (idempotent grant), `Economy.settled?/1`, `Economy.vn_day_bounds/1`, a lobby card with progress and "Nhận".
+- **S:** `TienLen.Seasons` (week bounds, standings, `payout/2`, `payout_due/1`, `paid/1`), `TienLen.Seasons.Scheduler` (10 s after start, then hourly; off in tests), leaderboard tabs.
+- **R:** `RoomServer.react/3` (`{:reaction, room_id, seat, emoji}`), the emoji bar and the seat bubble on the table.
+- 6 new admin settings (mission and season rewards).
+
+### VERIFIED
+
+- `mix precommit`: **406 passed (2 doctests, 404 tests)**, no warnings; 8 full runs clean.
+- `test/tien_len/social_features_test.exs`:
+  - a three-pair on a 2 is counted as a chop and reaches the result;
+  - profile aggregates and daily counts; avatars;
+  - friends: the whole flow, notifications, reverse request = accept, decline / cancel / refusals, 10/min;
+  - missions: progress only from today; claim refused before done; paid once; ledger line;
+  - seasons: weekly standings; not paid before the end; top 3 with a win paid 1,000 / 500 and the 0-win player nothing; a second payout pays nothing; `paid/1`.
+- `test/tien_len_web/social_features_live_test.exs`:
+  - own profile numbers; avatar pick shown in the header;
+  - friend request → badge → accept on `/ban-be` → both pages update; search + request;
+  - missions card live after a recorded game, claim → header balance;
+  - weekly tabs;
+  - reactions seen by the other player; strangers and unknown emoji refused.
+- Two older tests updated (seat map now has `avatar`; the reasons list). A latent flaky test (a random deal could be an instant win) was fixed with a fixed deal.
+- **Production:**
+  - migration ran; with 2 temporary accounts: friend request + accept, avatar, missions listed with rewards 100/150/200;
+  - `payout_due` for last week → `{:ok, []}` (no games that week);
+  - accounts deleted; no errors in the log; `bien`, `ai_ga`, `ben` untouched.
+
+### Notes
+
+- Games recorded before this deploy have `chops = 0`, `coins = 0`, `instant = false`: profile numbers for chặt heo / coins / tới trắng start from now.
+- Missions and seasons pay coins: farming with several accounts is possible (see RISKS P12, P19).
 
 ## Environment state
 

@@ -9,5 +9,9 @@ defmodule TienLen.Stats.GamePlayer do
     field :place, :integer
     field :won, :boolean
     field :removed, :boolean, default: false
+    # P2
+    field :chops, :integer, default: 0
+    field :coins, :integer, default: 0
+    field :instant, :boolean, default: false
   end
 end

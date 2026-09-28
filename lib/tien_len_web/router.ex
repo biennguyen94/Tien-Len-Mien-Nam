@@ -46,6 +46,8 @@ defmodule TienLenWeb.Router do
       live "/bang-xep-hang", LeaderboardLive
       live "/lich-su", HistoryLive
       live "/lich-su-coin", CoinHistoryLive
+      live "/nguoi-choi/:username", ProfileLive
+      live "/ban-be", FriendsLive
     end
   end
 

@@ -106,7 +106,10 @@ defmodule TienLenWeb.UserAuthTest do
       {:ok, _laptop, _} = live(device.(), ~p"/phong/#{id}")
 
       room = :sys.get_state(RoomServer.whereis(id)).room
-      assert room.seats == %{0 => %{player_id: user.id, name: "An", connected: true}}
+
+      assert room.seats == %{
+               0 => %{player_id: user.id, name: "An", connected: true, avatar: nil}
+             }
     end
   end
 end

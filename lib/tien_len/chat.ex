@@ -43,6 +43,12 @@ defmodule TienLen.Chat do
           at: DateTime.t()
         }
 
+  # R1: emoji reactions at the table (not stored, not chat)
+  @reactions ~w(😂 👏 😮 😡 👍 🔥)
+
+  @doc "Emoji reactions offered at the table (R1)."
+  def reactions, do: @reactions
+
   @doc "The quick phrases (G3)."
   def phrases, do: @phrases
 

@@ -106,7 +106,11 @@ defmodule TienLen.RoomServer do
   end
 
   @doc "Seats (or reconnects) `player_id` and monitors the calling process."
-  def join(room_id, player_id, name), do: call(room_id, {:join, player_id, name})
+  def join(room_id, player_id, name, avatar \\ nil),
+    do: call(room_id, {:join, player_id, name, avatar})
+
+  @doc "A seated player shows an emoji on their seat (R1); broadcasts `{:reaction, room_id, seat, emoji}`."
+  def react(room_id, player_id, emoji), do: call(room_id, {:react, player_id, emoji})
 
   def leave(room_id, player_id), do: call(room_id, {:leave, player_id})
   def start_game(room_id, player_id), do: call(room_id, {:start_game, player_id})
@@ -233,8 +237,11 @@ defmodule TienLen.RoomServer do
   end
 
   @impl true
-  def handle_call({:join, player_id, name}, {pid, _tag}, state) do
-    case Room.join(state.room, player_id, name) do
+  def handle_call({:join, player_id, name}, from, state),
+    do: handle_call({:join, player_id, name, nil}, from, state)
+
+  def handle_call({:join, player_id, name, avatar}, {pid, _tag}, state) do
+    case Room.join(state.room, player_id, name, avatar) do
       {:ok, room, seat, events} ->
         state = state |> track(pid, player_id) |> cancel_disconnect_timer(player_id)
         {:reply, {:ok, seat}, changed(state, room, events)}
@@ -324,6 +331,26 @@ defmodule TienLen.RoomServer do
       end
 
     {:reply, hints, state}
+  end
+
+  def handle_call({:react, player_id, emoji}, _from, state) do
+    case Room.seat_of(state.room, player_id) do
+      nil ->
+        {:reply, {:error, :not_in_room}, state}
+
+      seat ->
+        if emoji in TienLen.Chat.reactions() do
+          Phoenix.PubSub.broadcast(
+            TienLen.PubSub,
+            topic(state.id),
+            {:reaction, state.id, seat, emoji}
+          )
+
+          {:reply, :ok, state}
+        else
+          {:reply, {:error, :unknown_command}, state}
+        end
+    end
   end
 
   def handle_call({:seated?, player_id}, _from, state),
@@ -527,8 +554,9 @@ defmodule TienLen.RoomServer do
       |> reschedule_turn(events)
       |> schedule_bot()
 
-    if Enum.any?(events, &(elem(&1, 0) == :game_over)), do: record_result(state)
+    # coins first, so the recorded game carries each player's net coins (P2)
     {state, events} = settle_coins(state, events)
+    if Enum.any?(events, &(elem(&1, 0) == :game_over)), do: record_result(state)
 
     Phoenix.PubSub.broadcast(
       TienLen.PubSub,
@@ -635,10 +663,14 @@ defmodule TienLen.RoomServer do
   # Y6: a failing write is logged and never interrupts play.
   defp record_result(%{recorder: nil}), do: :ok
 
-  defp record_result(%{recorder: recorder, room: room, id: id}) do
+  defp record_result(%{recorder: recorder, room: room, id: id, coin_deltas: deltas}) do
     case Room.result(room) do
-      nil -> :ok
-      result -> recorder.record(result)
+      nil ->
+        :ok
+
+      result ->
+        players = Enum.map(result.players, &Map.put(&1, :coins, Map.get(deltas, &1.seat, 0)))
+        recorder.record(%{result | players: players})
     end
   rescue
     error ->
