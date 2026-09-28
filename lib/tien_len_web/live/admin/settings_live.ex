@@ -46,7 +46,13 @@ defmodule TienLenWeb.Admin.SettingsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <h1 class="text-xl font-bold">Cài đặt</h1>
       <.admin_nav active={:settings} />
       <form

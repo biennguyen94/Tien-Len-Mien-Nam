@@ -35,7 +35,17 @@ defmodule TienLen.RoomServer do
   # events after which the (possibly same) current player gets a fresh turn timer
   @turn_events [:played, :chopped, :passed, :timed_out, :round_ended, :lead_moved, :game_started]
   # events that change the lobby summary (player count, status, host)
-  @lobby_events [:joined, :left, :host_changed, :game_started, :game_over, :stake_changed]
+  @lobby_events [
+    :joined,
+    :left,
+    :host_changed,
+    :game_started,
+    :game_over,
+    :stake_changed,
+    :private_changed
+  ]
+  # room chat kept in memory (G1)
+  @chat_keep 50
 
   # -- API ----------------------------------------------------------------------
 
@@ -116,6 +126,25 @@ defmodule TienLen.RoomServer do
   @doc "The host changes the room's stake between games (E7)."
   def set_stake(room_id, player_id, stake), do: call(room_id, {:set_stake, player_id, stake})
 
+  @doc "The host makes the room private (hidden from the lobby) or public (G11)."
+  def set_private(room_id, player_id, private?),
+    do: call(room_id, {:set_private, player_id, private?})
+
+  @doc "True if `player_id` is seated in the room."
+  def seated?(room_id, player_id), do: call(room_id, {:seated?, player_id})
+
+  @doc """
+  Adds a prepared chat message (`TienLen.Chat.prepare/2`) from the seated `player_id` (G4).
+  Broadcasts `{:room_chat, room_id, msg}` on the room topic.
+  """
+  def chat(room_id, player_id, msg), do: call(room_id, {:chat, player_id, msg})
+
+  @doc "The room chat, oldest first, for a seated player."
+  def chat_history(room_id, player_id), do: call(room_id, {:chat_history, player_id})
+
+  @doc "Removes a chat message (admin, G12). Broadcasts `{:room_chat_deleted, room_id, id}`."
+  def delete_chat(room_id, msg_id), do: call(room_id, {:delete_chat, msg_id})
+
   @doc "Dry run of a command (`{:play, cards}`, `:pass`, `{:chop, cards}`) for UI labels."
   def check(room_id, player_id, cmd), do: call(room_id, {:check, player_id, cmd})
 
@@ -150,7 +179,12 @@ defmodule TienLen.RoomServer do
     {:ok,
      %{
        id: id,
-       room: Room.new(id, Keyword.get(opts, :stake, 0)),
+       room: %{
+         Room.new(id, Keyword.get(opts, :stake, 0))
+         | private: Keyword.get(opts, :private, false)
+       },
+       # newest first, at most @chat_keep
+       chat: [],
        version: 0,
        turn_timeout: Keyword.get(opts, :turn_timeout, @turn_timeout),
        disconnect_timeout: Keyword.get(opts, :disconnect_timeout, @disconnect_timeout),
@@ -227,6 +261,7 @@ defmodule TienLen.RoomServer do
       |> Map.put(:turn_ms_left, turn_ms_left(state))
       |> Map.put(:coin_deltas, state.coin_deltas)
       |> Map.put(:balances, seat_balances(state))
+      |> Map.put(:chat, Enum.reverse(state.chat))
 
     {:reply, view, state}
   end
@@ -246,6 +281,44 @@ defmodule TienLen.RoomServer do
     reply_change(state, Room.kick(state.room, player_id), fn state ->
       state |> untrack_player(player_id) |> cancel_disconnect_timer(player_id)
     end)
+  end
+
+  def handle_call({:set_private, player_id, private?}, _from, state) do
+    reply_change(state, Room.set_private(state.room, player_id, private?))
+  end
+
+  def handle_call({:seated?, player_id}, _from, state),
+    do: {:reply, Room.seat_of(state.room, player_id) != nil, state}
+
+  def handle_call({:chat, player_id, msg}, _from, state) do
+    if Room.seat_of(state.room, player_id) == nil do
+      {:reply, {:error, :not_in_room}, state}
+    else
+      Phoenix.PubSub.broadcast(TienLen.PubSub, topic(state.id), {:room_chat, state.id, msg})
+      {:reply, :ok, %{state | chat: Enum.take([msg | state.chat], @chat_keep)}}
+    end
+  end
+
+  def handle_call({:chat_history, player_id}, _from, state) do
+    if Room.seat_of(state.room, player_id) == nil,
+      do: {:reply, {:error, :not_in_room}, state},
+      else: {:reply, {:ok, Enum.reverse(state.chat)}, state}
+  end
+
+  def handle_call({:delete_chat, msg_id}, _from, state) do
+    case Enum.find(state.chat, &(&1.id == msg_id)) do
+      nil ->
+        {:reply, {:error, :not_found}, state}
+
+      msg ->
+        Phoenix.PubSub.broadcast(
+          TienLen.PubSub,
+          topic(state.id),
+          {:room_chat_deleted, state.id, msg_id}
+        )
+
+        {:reply, {:ok, msg}, %{state | chat: Enum.reject(state.chat, &(&1.id == msg_id))}}
+    end
   end
 
   def handle_call({:set_stake, player_id, stake}, _from, state) do
@@ -286,7 +359,8 @@ defmodule TienLen.RoomServer do
       status: room.status,
       host_name: host && host.name,
       joinable: room.status == :waiting and map_size(room.seats) < 4,
-      stake: room.stake
+      stake: room.stake,
+      private: room.private
     }
 
     {:reply, summary, state}

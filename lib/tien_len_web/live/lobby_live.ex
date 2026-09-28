@@ -10,19 +10,34 @@ defmodule TienLenWeb.LobbyLive do
 
   use TienLenWeb, :live_view
 
-  alias TienLen.{Accounts, Economy, Lobby}
+  import TienLenWeb.ChatComponents
+
+  alias TienLen.{Accounts, Chat, Economy, Lobby, Presence}
   alias TienLenWeb.Text
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     user = socket.assigns.current_user
-    if connected?(socket) and user, do: Lobby.subscribe()
+    live? = connected?(socket) and user != nil
+
+    if live? do
+      Lobby.subscribe()
+      Chat.subscribe_lobby()
+      Presence.subscribe()
+      Presence.move(self(), user, "lobby")
+    end
+
     login_username = Phoenix.Flash.get(socket.assigns.flash, :login_username)
 
     {:ok,
      socket
      |> assign(:page_title, "Sảnh")
-     |> assign(:rooms, if(user, do: Lobby.list_rooms(), else: []))
+     # G10: where to go after logging in (a room link opened while logged out)
+     |> assign(:next, TienLenWeb.UserAuth.safe_next(params["next"]))
+     |> assign(:rooms, if(user, do: Lobby.public_rooms(), else: []))
+     |> assign(:lobby_chat, if(live?, do: Chat.lobby_history(), else: []))
+     |> assign(:chat_key, 0)
+     |> assign(:online, if(live?, do: Presence.online_users(), else: []))
      |> assign(:editing_name, false)
      |> assign(:changing_password, false)
      |> assign(:trigger_submit, false)
@@ -80,7 +95,9 @@ defmodule TienLenWeb.LobbyLive do
   # -- logged-in lobby ------------------------------------------------------------
 
   def handle_event("create", params, %{assigns: %{current_user: %{}}} = socket) do
-    case Lobby.open_room(stake: parse_stake(params["room"] || %{})) do
+    room = params["room"] || %{}
+
+    case Lobby.open_room(stake: parse_stake(room), private: room["private"] == "true") do
       {:ok, id} -> {:noreply, push_navigate(socket, to: ~p"/phong/#{id}")}
       {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
     end
@@ -134,6 +151,39 @@ defmodule TienLenWeb.LobbyLive do
     end
   end
 
+  # G5: lobby chat
+  def handle_event(
+        "lobby_chat_send",
+        %{"text" => text},
+        %{assigns: %{current_user: %{id: id}}} = socket
+      ) do
+    case Chat.send_lobby(id, text) do
+      :ok -> {:noreply, update(socket, :chat_key, &(&1 + 1))}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
+    end
+  end
+
+  # G12: admins delete a lobby message (TienLen.Admin re-checks the role)
+  def handle_event(
+        "lobby_chat_delete",
+        %{"id" => id},
+        %{assigns: %{current_user: %{id: me}}} = socket
+      ) do
+    with {id, ""} <- Integer.parse(to_string(id)),
+         :ok <- TienLen.Admin.delete_message(me, {:lobby, id}) do
+      {:noreply, socket}
+    else
+      {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  # G9: "Không nhận lời mời"
+  def handle_event("toggle_invites", _params, %{assigns: %{current_user: %{} = user}} = socket) do
+    {:ok, user} = Accounts.set_accept_invites(user, !user.accept_invites)
+    {:noreply, assign(socket, :current_user, user)}
+  end
+
   def handle_event("edit_name", _params, socket),
     do: {:noreply, assign(socket, :editing_name, true)}
 
@@ -160,10 +210,19 @@ defmodule TienLenWeb.LobbyLive do
 
   @impl true
   def handle_info({:lobby_updated, _id}, socket),
-    do: {:noreply, assign(socket, :rooms, Lobby.list_rooms())}
+    do: {:noreply, assign(socket, :rooms, Lobby.public_rooms())}
 
   def handle_info({:room_closed, _id}, socket),
-    do: {:noreply, assign(socket, :rooms, Lobby.list_rooms())}
+    do: {:noreply, assign(socket, :rooms, Lobby.public_rooms())}
+
+  def handle_info({:lobby_chat, msg}, socket),
+    do: {:noreply, update(socket, :lobby_chat, &Enum.take(&1 ++ [msg], -100))}
+
+  def handle_info({:lobby_chat_deleted, id}, socket),
+    do: {:noreply, update(socket, :lobby_chat, &Enum.reject(&1, fn m -> m.id == id end))}
+
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket),
+    do: {:noreply, assign(socket, :online, Presence.online_users())}
 
   def handle_info(_unexpected, socket), do: {:noreply, assign_claimable(socket)}
 
@@ -172,7 +231,12 @@ defmodule TienLenWeb.LobbyLive do
   @impl true
   def render(%{current_user: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+    >
       <div class="grid gap-4 md:grid-cols-2">
         <section id="register" class="card bg-base-200 p-6">
           <h1 class="text-xl font-bold mb-3">Đăng ký</h1>
@@ -186,6 +250,7 @@ defmodule TienLenWeb.LobbyLive do
             phx-trigger-action={@trigger_submit}
           >
             <input type="hidden" name="user[registered]" value="true" />
+            <input :if={@next} type="hidden" name="user[next]" value={@next} />
             <.input
               field={@register_form[:display_name]}
               label="Chào bạn! Bạn tên gì?"
@@ -221,6 +286,7 @@ defmodule TienLenWeb.LobbyLive do
         <section id="login" class="card bg-base-200 p-6">
           <h2 class="text-xl font-bold mb-3">Đăng nhập</h2>
           <.form for={@login_form} id="login-form" action={~p"/dang-nhap"} method="post">
+            <input :if={@next} type="hidden" name="user[next]" value={@next} />
             <.input
               field={@login_form[:username]}
               label="Tài khoản"
@@ -244,7 +310,12 @@ defmodule TienLenWeb.LobbyLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+    >
       <section :if={@editing_name} id="name-form" class="card bg-base-200 p-4">
         <.form
           for={@name_form}
@@ -278,6 +349,15 @@ defmodule TienLenWeb.LobbyLive do
           <button id="toggle-password" phx-click="toggle_password" class="btn btn-ghost btn-xs">
             đổi mật khẩu
           </button>
+          <label class="label text-sm gap-1 ml-2">
+            <input
+              id="toggle-invites"
+              type="checkbox"
+              class="checkbox checkbox-xs"
+              checked={!@current_user.accept_invites}
+              phx-click="toggle_invites"
+            /> Không nhận lời mời
+          </label>
         </div>
         <form
           :if={@changing_password}
@@ -335,8 +415,20 @@ defmodule TienLenWeb.LobbyLive do
               label="Tiền cược mỗi ván"
             />
           </div>
+          <label class="label mb-3 text-sm gap-1">
+            <input type="hidden" name="room[private]" value="false" />
+            <input
+              id="room-private"
+              type="checkbox"
+              name="room[private]"
+              value="true"
+              class="checkbox checkbox-sm"
+            /> Riêng tư
+          </label>
           <button id="create-room" type="submit" class="btn btn-primary mb-2">Tạo phòng</button>
-          <span class="text-xs text-base-content/60 mb-3">0 = chơi vui, hoặc từ 10 trở lên</span>
+          <span class="text-xs text-base-content/60 mb-3">
+            Cược 0 = chơi vui, hoặc từ 10. Phòng riêng tư không hiện ở sảnh, chỉ vào bằng lời mời hoặc link.
+          </span>
         </.form>
 
         <h2 class="text-lg font-semibold">Các phòng</h2>
@@ -367,6 +459,40 @@ defmodule TienLenWeb.LobbyLive do
             </.link>
           </li>
         </ul>
+
+        <div class="grid gap-4 md:grid-cols-3">
+          <div class="md:col-span-2">
+            <.chat_box
+              id="lobby-chat"
+              title="Chat sảnh"
+              messages={@lobby_chat}
+              me={@current_user.id}
+              send_event="lobby_chat_send"
+              phrases
+              key={@chat_key}
+              delete_event={@current_user.role == "admin" && "lobby_chat_delete"}
+            />
+          </div>
+          <section id="online" class="card bg-base-200 p-3 space-y-2">
+            <h2 class="font-semibold text-sm">Đang online ({length(@online)})</h2>
+            <ul class="max-h-64 overflow-y-auto divide-y divide-base-300 text-sm">
+              <li :for={u <- @online} id={"online-#{u.id}"} class="py-1 flex items-center gap-2">
+                <span class="flex-1 truncate">{u.name}</span>
+                <span class="text-xs text-base-content/60">
+                  {TienLenWeb.Social.place_label(u.place)}
+                </span>
+                <button
+                  :if={u.id != @current_user.id}
+                  phx-click="social:open"
+                  phx-value-id={u.id}
+                  class="btn btn-xs"
+                >
+                  Nhắn
+                </button>
+              </li>
+            </ul>
+          </section>
+        </div>
       </section>
     </Layouts.app>
     """

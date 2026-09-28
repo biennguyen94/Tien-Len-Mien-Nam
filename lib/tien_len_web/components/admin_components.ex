@@ -51,7 +51,10 @@ defmodule TienLenWeb.AdminComponents do
     "close_room" => "Đóng phòng",
     "kick" => "Mời ra khỏi phòng",
     "update_settings" => "Đổi cài đặt kinh tế",
-    "announce" => "Thông báo"
+    "announce" => "Thông báo",
+    "mute" => "Cấm chat",
+    "unmute" => "Bỏ cấm chat",
+    "delete_message" => "Xóa tin nhắn"
   }
 
   def action_label(action), do: Map.get(@actions, action, action)

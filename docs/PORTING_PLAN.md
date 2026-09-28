@@ -177,3 +177,31 @@ Tien-Len-Mien-Nam/
 
 - [x] Migrations on the containers; promote the first admin with the server command; smoke test; DEPLOY.md.
 
+## Phase 24 — Chat: presence, limiter, room chat, quick phrases (CH1–CH4, G1–G4, G6) — DONE (2026-09-28)
+
+- [x] In-memory presence (online players and where they are); dashboard "online" from it.
+- [x] `TienLen.Chat`: validation (G2), shared rate limiter, quick phrases (G3).
+- [x] Room chat in the room process (last 50), panel on the table page, usable during a game.
+- Tests: only seated players read/write; limits and rate limit; history for newcomers; nothing in the database.
+
+## Phase 25 — Chat: lobby chat, private chat (G5, G7) — DONE (2026-09-28)
+
+- [x] Lobby chat process (last 100) and panel; online list in the lobby.
+- [x] Private chat (last 20 per pair, 1 h expiry), floating panel on lobby and table, unread badge; offline targets refused.
+- Tests: live delivery; only the two players see a private line; expiry; offline refusal.
+
+## Phase 26 — Invites (IV1, IV3, G8–G10) — DONE (2026-09-28)
+
+- [x] Invite list and popup (60 s, one pending per target, 10/min per inviter), accept re-checks on the server, decline/expiry shown to the inviter.
+- [x] `users.accept_invites` + lobby toggle; "Chép link" hook; return to the room after login.
+- Tests: accept joins; every refusal case; toggle respected; login redirect back.
+
+## Phase 27 — Private rooms, admin chat moderation (IV2, G11, G12) — DONE (2026-09-28)
+
+- [x] Private flag at creation + host toggle while waiting; hidden from the lobby, visible to admins.
+- [x] Admin mute (`users.muted_until`) and message deletion, audited.
+- Tests: private rooms not listed but joinable by link/invite; muted players refused everywhere; deletions live.
+
+## Phase 28 — Chat and invites: deploy — DONE (2026-09-28)
+
+- [x] Migrations on the containers; smoke test; DEPLOY.md.

@@ -59,6 +59,16 @@ defmodule TienLenWeb.Admin.UserLive do
   def handle_event("remove_admin", _params, socket),
     do: result(socket, Admin.set_admin(me(socket), socket.assigns.id, false), "Đã gỡ quyền admin")
 
+  def handle_event("mute", %{"minutes" => minutes}, socket) do
+    minutes = String.to_integer(minutes)
+    result(socket, Admin.mute(me(socket), socket.assigns.id, minutes), "Đã cấm chat")
+  rescue
+    ArgumentError -> {:noreply, put_flash(socket, :error, Text.reason(:invalid_duration))}
+  end
+
+  def handle_event("unmute", _params, socket),
+    do: result(socket, Admin.unmute(me(socket), socket.assigns.id), "Đã bỏ cấm chat")
+
   def handle_event("rename", %{"name" => name}, socket),
     do: result(socket, Admin.rename(me(socket), socket.assigns.id, name), "Đã đổi tên")
 
@@ -97,12 +107,21 @@ defmodule TienLenWeb.Admin.UserLive do
     assigns = assign(assigns, :u, assigns.detail.user)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <.admin_nav active={:users} />
       <h1 class="text-xl font-bold">
         {@u.display_name} <span class="text-base-content/60">@{@u.username}</span>
         <span :if={@u.role == "admin"} class="badge badge-error">admin</span>
         <span :if={@u.locked_at} id="locked-badge" class="badge badge-warning">bị khóa</span>
+        <span :if={TienLen.Accounts.User.muted?(@u)} id="muted-badge" class="badge badge-warning">
+          cấm chat đến {vn_time(@u.muted_until)}
+        </span>
       </h1>
       <p id="user-coins">
         🪙 {Text.coins(@u.coins)} coin · tạo lúc {vn_time(@u.inserted_at)}
@@ -141,6 +160,22 @@ defmodule TienLenWeb.Admin.UserLive do
               class="btn btn-sm"
               data-confirm="Đặt lại mật khẩu?"
             >Đặt lại mật khẩu</button>
+          </div>
+          <div id="mute" class="flex flex-wrap items-center gap-2 text-sm">
+            <span>Cấm chat:</span>
+            <button
+              :for={{m, label} <- [{10, "10 phút"}, {60, "1 giờ"}, {1440, "24 giờ"}]}
+              id={"mute-#{m}"}
+              phx-click="mute"
+              phx-value-minutes={m}
+              class="btn btn-xs btn-warning"
+            >{label}</button>
+            <button
+              :if={TienLen.Accounts.User.muted?(@u)}
+              id="unmute"
+              phx-click="unmute"
+              class="btn btn-xs"
+            >Bỏ cấm chat</button>
           </div>
           <p :if={@temp_password} id="temp-password" class="alert alert-warning">
             Mật khẩu tạm (chỉ hiện một lần): <code class="font-mono">{@temp_password}</code>

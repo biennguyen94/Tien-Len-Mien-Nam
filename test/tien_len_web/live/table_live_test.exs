@@ -39,7 +39,8 @@ defmodule TienLenWeb.TableLiveTest do
 
     test "without logging in the player is sent to the lobby (A3)" do
       id = open_room!([])
-      assert {:error, {:redirect, %{to: "/"}}} = live(sandbox_conn(), ~p"/phong/#{id}")
+      assert {:error, {:redirect, %{to: to}}} = live(sandbox_conn(), ~p"/phong/#{id}")
+      assert to == "/?" <> URI.encode_query(next: "/phong/#{id}")
     end
 
     test "unknown room: back to the lobby with a message" do
@@ -184,7 +185,20 @@ defmodule TienLenWeb.TableLiveTest do
         :wrong_password,
         :throttled,
         :no_game,
-        :unknown_command
+        :unknown_command,
+        :invalid_message,
+        :muted,
+        :chat_too_fast,
+        :not_online,
+        :invites_off,
+        :invite_pending,
+        :target_busy,
+        :invite_too_fast,
+        :invite_expired,
+        :not_enough_coins_to_join,
+        :cannot_mute_self,
+        :not_muted,
+        :invalid_duration
       ]
 
       assert Enum.sort(reasons) == Enum.sort(Text.known_reasons())

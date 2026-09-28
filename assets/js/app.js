@@ -25,11 +25,37 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/tien_len"
 import topbar from "../vendor/topbar"
 
+// Small UI-only hooks (no game logic, CLAUDE.md rule 2)
+const Hooks = {
+  // keeps a chat list scrolled to the newest message
+  ChatScroll: {
+    mounted() { this.el.scrollTop = this.el.scrollHeight },
+    updated() { this.el.scrollTop = this.el.scrollHeight },
+  },
+  // "Chép link" (G10): copies data-url to the clipboard
+  CopyLink: {
+    mounted() {
+      this.el.addEventListener("click", () => {
+        const done = () => {
+          const label = this.el.textContent
+          this.el.textContent = "Đã chép!"
+          setTimeout(() => { this.el.textContent = label }, 1500)
+        }
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(this.el.dataset.url).then(done, () => window.prompt("Link phòng:", this.el.dataset.url))
+        } else {
+          window.prompt("Link phòng:", this.el.dataset.url)
+        }
+      })
+    },
+  },
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...Hooks},
 })
 
 // Show progress bar on live navigation and form submits

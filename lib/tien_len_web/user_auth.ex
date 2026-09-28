@@ -28,14 +28,24 @@ defmodule TienLenWeb.UserAuth do
     assign(conn, :current_user, user)
   end
 
-  @doc "Logs the user in: renews the session and redirects to the lobby."
-  def log_in_user(conn, user) do
+  @doc """
+  A safe place to go after logging in (G10): only a room path like `/phong/abc`, never an
+  outside URL. Anything else is `nil`.
+  """
+  def safe_next("/phong/" <> id = path) when byte_size(id) in 1..20 do
+    if String.match?(id, ~r/^[A-Za-z0-9_-]+$/), do: path
+  end
+
+  def safe_next(_), do: nil
+
+  @doc "Logs the user in: renews the session and redirects to the lobby (or a room, G10)."
+  def log_in_user(conn, user, next \\ nil) do
     conn
     |> configure_session(renew: true)
     |> clear_session()
     |> put_session("user_id", user.id)
     |> put_session("live_socket_id", "user_sessions:" <> random_id())
-    |> redirect(to: ~p"/")
+    |> redirect(to: safe_next(next) || ~p"/")
   end
 
   @doc "Logs out: disconnects this session's LiveViews, clears the session."
@@ -75,16 +85,19 @@ defmodule TienLenWeb.UserAuth do
     end
   end
 
-  def on_mount(:require_user, _params, session, socket) do
+  def on_mount(:require_user, params, session, socket) do
     allow_ecto_sandbox(socket)
     socket = mount_current_user(socket, session)
 
     case socket.assigns.current_user do
       nil ->
+        # G10: a room link opened while logged out comes back to the room after login
+        next = if socket.view == TienLenWeb.TableLive, do: safe_next("/phong/#{params["id"]}")
+
         {:halt,
          socket
          |> Phoenix.LiveView.put_flash(:error, "Hãy đăng nhập để vào phòng")
-         |> Phoenix.LiveView.redirect(to: ~p"/")}
+         |> Phoenix.LiveView.redirect(to: if(next, do: ~p"/?#{[next: next]}", else: ~p"/"))}
 
       user ->
         {:cont,
@@ -110,6 +123,7 @@ defmodule TienLenWeb.UserAuth do
     |> track_announcement()
     |> track_account()
     |> track_coins()
+    |> TienLenWeb.Social.attach()
   end
 
   defp track_announcement(socket) do

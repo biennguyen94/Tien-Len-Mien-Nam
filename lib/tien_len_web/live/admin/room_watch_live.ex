@@ -3,6 +3,7 @@ defmodule TienLenWeb.Admin.RoomWatchLive do
   use TienLenWeb, :live_view
   import TienLenWeb.AdminComponents
   import TienLenWeb.CardComponents
+  import TienLenWeb.ChatComponents
   alias TienLen.Admin
   alias TienLenWeb.Text
 
@@ -29,6 +30,8 @@ defmodule TienLenWeb.Admin.RoomWatchLive do
        socket |> put_flash(:info, "Phòng đã đóng") |> push_navigate(to: ~p"/quan-tri/phong")}
 
   def handle_info({:room_updated, _id, _v, _events}, socket), do: {:noreply, load(socket)}
+  def handle_info({:room_chat, _id, _msg}, socket), do: {:noreply, load(socket)}
+  def handle_info({:room_chat_deleted, _id, _msg_id}, socket), do: {:noreply, load(socket)}
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   @impl true
@@ -52,6 +55,16 @@ defmodule TienLenWeb.Admin.RoomWatchLive do
     end
   end
 
+  # G12
+  def handle_event("delete_msg", %{"id" => id}, socket) do
+    where = {:room, socket.assigns.room_id, String.to_integer(id)}
+
+    case Admin.delete_message(socket.assigns.current_user.id, where) do
+      :ok -> {:noreply, socket |> put_flash(:info, "Đã xóa tin nhắn") |> load()}
+      error -> {:noreply, put_flash(socket, :error, error_text(error))}
+    end
+  end
+
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   @impl true
@@ -59,7 +72,13 @@ defmodule TienLenWeb.Admin.RoomWatchLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <.admin_nav active={:rooms} />
       <h1 class="text-xl font-bold">
         Phòng <span class="font-mono">{@room_id}</span>
@@ -67,6 +86,7 @@ defmodule TienLenWeb.Admin.RoomWatchLive do
           do: "Chơi vui",
           else: "Cược " <> Text.coins(@view.stake)}</span>
         <span class="badge">{if @view.status == :playing, do: "Đang chơi", else: "Đang chờ"}</span>
+        <span :if={@view.private} class="badge badge-info">riêng tư</span>
       </h1>
       <button
         id="close-room"
@@ -112,6 +132,8 @@ defmodule TienLenWeb.Admin.RoomWatchLive do
           </div>
         </li>
       </ul>
+
+      <.chat_box id="watch-chat" title="Chat phòng" messages={@view.chat} delete_event="delete_msg" />
     </Layouts.app>
     """
   end

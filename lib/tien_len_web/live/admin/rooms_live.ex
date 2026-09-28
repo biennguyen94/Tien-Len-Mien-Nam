@@ -31,7 +31,13 @@ defmodule TienLenWeb.Admin.RoomsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <h1 class="text-xl font-bold">Phòng đang mở</h1>
       <.admin_nav active={:rooms} />
       <p :if={@rooms == []} class="text-base-content/70">Không có phòng nào.</p>
@@ -46,7 +52,10 @@ defmodule TienLenWeb.Admin.RoomsLive do
             <td class="font-mono">{r.id}</td>
             <td>{r.host_name || "—"}</td>
             <td>{r.players}/{r.max_players}</td>
-            <td>{if r.stake == 0, do: "Chơi vui", else: Text.coins(r.stake)}</td>
+            <td>
+              {if r.stake == 0, do: "Chơi vui", else: Text.coins(r.stake)}
+              <span :if={r.private} class="badge badge-info badge-xs">riêng tư</span>
+            </td>
             <td>{if r.status == :playing, do: "Đang chơi", else: "Đang chờ"}</td>
             <td class="flex gap-2">
               <.link navigate={~p"/quan-tri/phong/#{r.id}"} class="btn btn-xs">Xem</.link>

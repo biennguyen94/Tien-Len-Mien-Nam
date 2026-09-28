@@ -107,6 +107,13 @@ docker compose ps                                                               
 
 ## Verification
 
+### Phases 24–28 (2026-09-28), chat and invites
+
+- The `add_chat_invites` migration ran at start (`users.accept_invites`, `users.muted_until`).
+- Through `rpc` with two temporary accounts: private room hidden from the lobby list; room chat (refused when not seated); private message; invite accepted; a lobby message posted and deleted.
+- Over HTTP: a room link opened logged out → `/?next=/phong/…`, login → back to the room; the lobby shows the chat, the online list, "Không nhận lời mời" and "Riêng tư".
+- Temporary accounts deleted. Chat and invites live in memory: `docker compose restart tien-len` clears them.
+
 ### Phases 19–23 (2026-09-28), admin
 
 - The `add_admin` migration ran at container start; `THROTTLE_BY_IP=false` active.

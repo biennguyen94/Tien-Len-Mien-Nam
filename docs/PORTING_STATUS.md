@@ -27,6 +27,11 @@ Last updated: 2026-09-28
 | 21 | Admin: dashboard, rooms (watch, close, kick), game history | **DONE** (2026-09-28) |
 | 22 | Admin: announcements, economy settings, login rate limit | **DONE** (2026-09-28) |
 | 23 | Admin: deploy | **DONE** (2026-09-28): first admin `bien` promoted by the server command |
+| 24 | Chat: presence, limiter, room chat, quick phrases | **DONE** (2026-09-28) |
+| 25 | Chat: lobby chat, private chat | **DONE** (2026-09-28) |
+| 26 | Invites: popup, "Chép link", "Không nhận lời mời" | **DONE** (2026-09-28) |
+| 27 | Private rooms, admin chat moderation | **DONE** (2026-09-28) |
+| 28 | Chat and invites: deploy | **DONE** (2026-09-28) |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -198,6 +203,35 @@ Interpretations taken to implement AD1–AD9 (confirm or override):
 | F6 | **Admin watch view** `/quan-tri/phong/:id`: read-only, all hands visible, no seat taken. An admin who is also seated sees the normal table on `/phong/:id`. |
 | F7 | **Economy settings** are stored in the database and apply to new actions from the moment they are saved (a registration after the change gets the new starting amount, etc.). Past ledger lines never change. |
 | F8 | **Login rate limit**: after **5 failed logins** for the same username or the same IP within 15 minutes, logins from them are refused for 15 minutes ("Thử lại sau"). Counters live in memory (they reset on restart). |
+
+### Batch 9 — chat and invites (owner, 2026-09-28)
+
+| # | Decision | Changes |
+|---|---|---|
+| CH1 | **Three chats**: room chat, lobby chat, and a **short version of private chat** (only to players online now, no inbox). | – |
+| CH2 | **Messages are kept in memory only**, never in the database. | – |
+| CH3 | **Quick phrases** (one click), **no profanity filter**. | – |
+| CH4 | **Chat is allowed during a game.** The risk of players telling each other their cards is accepted. | Risk accepted (RISKS) |
+| IV1 | **Invites** both ways: an **in-app popup** to an online player, and a **"Chép link"** button for the room link. | – |
+| IV2 | **Private rooms**: not listed in the lobby, joined only by invite or link. | – |
+| IV3 | A player setting **"Không nhận lời mời"**. **No "block this player"** button. | – |
+
+Interpretations taken to implement CH1–IV3 (confirm or override):
+
+| # | Interpretation |
+|---|---|
+| G1 | **Where messages live**: room chat, the last 50 in the room process (lost when the room closes); lobby chat, the last 100 in one process (lost on restart); private chat, the last 20 lines per pair of players, dropped after 1 hour without messages or on restart (so they survive moving between the lobby and a table). |
+| G2 | **Limits for every chat**: 1–200 characters after trimming; **5 messages per 10 s per player** across all chats (server-side); names come from the account; links shown as plain text; HTML escaped. |
+| G3 | **Quick phrases**, fixed list: "Nhanh lên!", "Hay quá!", "Chúc may mắn!", "Cảm ơn!", "Xin lỗi, mạng lag", "Ván này căng!", "Chơi lại không?", "Hẹn gặp lại!". Available in room chat and lobby chat. They count towards the rate limit. |
+| G4 | **Room chat**: only players seated in the room read and write it; a newcomer sees the last 50 messages; system lines are not mixed in. |
+| G5 | **Lobby chat**: every logged-in player on the lobby page; the last 100 shown on open. |
+| G6 | **Online list** in the lobby: players with at least one open page, with where they are ("Ở sảnh", "Trong phòng", "Đang chơi"). Uses in-memory presence. The admin dashboard's "online" number uses it too. |
+| G7 | **Private chat**: opened by clicking a name in the online list (or on a table); a small panel that follows the player on the lobby and table pages, with an unread badge. Sending to a player who is offline is refused ("Người này không online"). |
+| G8 | **Invites**: any seated player may invite, while the room is waiting (a game in progress cannot be joined, as today). Targets: online players not seated in any room. The popup shows the room, the inviter and the stake, with "Vào" / "Từ chối"; it expires after **60 s**. At most **one pending invite per target** and **10 invites per minute per inviter**. "Vào" re-checks everything on the server (seat free, still waiting, enough coins, not kicked from that room). The inviter sees declines and expiries. |
+| G9 | **"Không nhận lời mời"**: stored on the account (`users.accept_invites`, the only new database column); such players are shown greyed out in the invite list and invites to them are refused. |
+| G10 | **"Chép link"** copies the full room URL (a small clipboard JS hook, no game logic). A logged-out player opening the link logs in and is then **sent back to that room**. |
+| G11 | **Private rooms**: chosen by the host at creation and switchable by the host while waiting; hidden from the lobby list but not from admins. The room id (40 random bits) is the secret: anyone with the link can join. |
+| G12 | **Admin moderation**: mute a player in all chats for 10 min / 1 h / 24 h (`users.muted_until`, survives restart), delete a room or lobby message (removed live for everyone). Both audited. Admins cannot read private chats (they are not stored). |
 
 ### Project decisions
 
@@ -944,13 +978,60 @@ Interpretations taken to implement AD1–AD9 (confirm or override):
 - `last_admin` cannot be reached through the web today: removing another admin needs a second admin, and demoting yourself is refused. It stays as a safety check.
 - Admins have strong powers (see all hands, change coins); every action is written to `admin_actions` and shown on "Nhật ký".
 
+## Phases 24–28 results — chat and invites (2026-09-28)
+
+### Delivered
+
+- **Phase 24 — presence, limiter, room chat (CH1–CH4, G1–G4, G6):**
+  - `TienLen.Presence` (Phoenix.Presence, topic `"online"`): every open page of a logged-in player, with the place (`lobby` / `room` / `playing` / `other`); the admin dashboard shows "Đang online";
+  - `TienLen.RateLimit` (ETS sliding window), used for chat (5 / 10 s) and invites (10 / min);
+  - `TienLen.Chat`: text rules (1–200 characters, whitespace collapsed), sender re-read from the database (locked → refused, muted → refused), name from the account, 8 quick phrases;
+  - room chat in the room process (last 50, `{:room_chat, …}` on the room topic), seated players only, also during a game; panel `#room-chat` on the table.
+- **Phase 25 — lobby and private chat (G5, G7):**
+  - `TienLen.Chat.Lobby` (last 100) and the `#lobby-chat` panel; online list `#online` with places and "Nhắn";
+  - `TienLen.Chat.Private` (last 20 per pair, dropped after 1 h without messages); `TienLenWeb.Social` attaches to every logged-in page: the floating "💬 Tin nhắn" panel (conversations with unread counts, "Đang online" tab), so private chat works on the lobby, table, leaderboard and admin pages.
+- **Phase 26 — invites (IV1, IV3, G8–G10):**
+  - `TienLen.Invites`: invite from the table ("Mời người chơi"), popup on any page of the target (Vào / Từ chối), 60 s expiry, one pending per target, 10 / min per inviter; accept re-checks the room and the coins (`not_enough_coins_to_join`), the table's join re-checks the rest (kicked, full);
+  - `users.accept_invites` + "Không nhận lời mời" checkbox in the lobby; such players are greyed out in the invite list;
+  - "Chép link" (clipboard hook, falls back to a prompt); a room link opened logged out goes to `/?next=/phong/<id>` and back to the room after login or registration (`UserAuth.safe_next/1` accepts only `/phong/<id>`).
+- **Phase 27 — private rooms and moderation (IV2, G11, G12):**
+  - "Riêng tư" checkbox when creating; host toggle while waiting; hidden from the lobby list (`Lobby.public_rooms/0`), shown with a badge to admins;
+  - `Admin.mute/4` (10 min / 1 h / 24 h, `users.muted_until`), `Admin.unmute/2`, `Admin.delete_message/2` (lobby: ✕ on the lobby for admins; room: ✕ in the watch view). Audited; the audit row names the author, never the text.
+- **Phase 28 — deploy:** migration `add_chat_invites` ran at container start.
+
+### VERIFIED
+
+- `mix precommit`: **374 passed (2 doctests, 372 tests)**, no warnings; 6 full runs clean.
+- New tests: `test/tien_len/chat_test.exs`, `test/tien_len/invites_test.exs`, `test/tien_len_web/chat_live_test.exs`. They cover:
+  - text rules; the rate limit; the name from the account; muted and locked senders; mute rules;
+  - room chat for seated players only, the cap of 50, chat during a game, deletions;
+  - lobby chat and deletion; private chat online-only, both sides, unread, 20-line cap, 1 h expiry;
+  - presence places;
+  - invite / accept / decline / expiry, one pending, every refusal, 10/min, the coin re-check, candidates;
+  - private rooms (host only, waiting only, hidden, joinable by id);
+  - in the browser: HTML escaped, quick phrases, history for a reopened page, errors shown, admin deletions live, online list moving from "Ở sảnh" to "Trong phòng", the unread badge, the panel on the table page, the popup and accept → room, decline, the greyed-out candidate, the copy-link URL, login back to the room (and unsafe `next` values ignored), the private-room toggle, mute buttons, the online stat.
+- **Production** (rpc + HTTP, with temporary accounts `smoke_a` / `smoke_b`, deleted afterwards):
+  - private room not in the lobby list;
+  - room chat ok, refused for a non-seated player;
+  - private message to an online player; invite accepted;
+  - a lobby message posted and deleted again;
+  - `/phong/abc` logged out → 302 `/?next=%2Fphong%2Fabc`, the login form carries `next`, login → 302 `/phong/abc`;
+  - the lobby shows "Chat sảnh", "Đang online", "Không nhận lời mời", "Riêng tư" and the message button.
+- Production accounts after the checks: `bien` (admin), `ai_ga`, `ben` (real players, untouched).
+
+### Notes
+
+- Chat, presence, invites and rate limits are in memory: a restart clears them (CH2). Single node only.
+- Collusion through chat is accepted (CH4, RISKS P17). There is no profanity filter or block button (CH3, IV3; RISKS P18).
+- NOT VERIFIED: the clipboard button and the chat auto-scroll in a real browser (JS hooks; LiveView tests do not run JS).
+
 ## Environment state
 
 - Original repo: `/home/bien_nguyen/tien-len` (unmodified source). It contains one untracked file, `docs/research.md`, added during research. That file is **stale**: it is superseded by this repo's `docs/`. The owner decided to keep it.
 - Scratch copy with `node_modules` and the probe tests: the session scratchpad (temporary, not needed).
 - Toolchain: `~/.local/beam` (OTP 28, Elixir 1.20.4, `phx_new` 1.8.15), shared with `open-mu-web`.
 - Git: local repo on branch `main`, no remote (the `gh` CLI is not installed). One commit per phase.
-- Docker: compose project `tien-len` running: `tien-len` (image `tien-len:latest`, host port 4020) and `tien-len-db` (postgres:18, volume `tien-len_tien-len-db`; accounts `bien` (admin) and `ai_ga`), both `restart: unless-stopped`. Stop with `cd deploy && docker compose down` (never `-v` unless the data should be deleted).
+- Docker: compose project `tien-len` running: `tien-len` (image `tien-len:latest`, host port 4020) and `tien-len-db` (postgres:18, volume `tien-len_tien-len-db`; accounts `bien` (admin), `ai_ga`, `ben`), both `restart: unless-stopped`. Stop with `cd deploy && docker compose down` (never `-v` unless the data should be deleted).
 - Dev/test database: container `tien-len-dev-db` on 127.0.0.1:5434 (`docker compose -f deploy/docker-compose.dev.yml up -d`), databases `tien_len_dev` and `tien_len_test`.
 - First admin: `bien` (server command). Promote more on the web ("Cấp quyền admin") or with `docker exec tien-len bin/tien_len rpc 'TienLen.Admin.promote("username")'`.
 - Owner decision: keep the stale `docs/research.md` in the original repo (do not delete it).

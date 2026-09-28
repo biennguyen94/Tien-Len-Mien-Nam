@@ -1,6 +1,8 @@
 defmodule TienLen.Accounts do
   @moduledoc "Player accounts: registration, authentication, display name (A2, A3)."
 
+  import Ecto.Query
+
   alias TienLen.Accounts.User
   alias TienLen.Repo
 
@@ -62,5 +64,15 @@ defmodule TienLen.Accounts do
   @doc "Changes the display name."
   def change_display_name(%User{} = user, name) do
     user |> User.display_name_changeset(%{display_name: name}) |> Repo.update()
+  end
+
+  @doc "The player's \"Không nhận lời mời\" setting (G9): `accept?` false turns invites off."
+  def set_accept_invites(%User{} = user, accept?) when is_boolean(accept?) do
+    user |> Ecto.Changeset.change(accept_invites: accept?) |> Repo.update()
+  end
+
+  @doc "Of `ids`, those whose owners do not accept invites (G9)."
+  def invites_off(ids) do
+    Repo.all(from u in User, where: u.id in ^ids and not u.accept_invites, select: u.id)
   end
 end

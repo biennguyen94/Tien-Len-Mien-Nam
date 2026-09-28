@@ -22,6 +22,9 @@ defmodule TienLen.Accounts.User do
     # admin (AD1, F2): changed only by TienLen.Admin, never cast from user input
     field :role, :string, default: "player"
     field :locked_at, :utc_datetime
+    # G9: the player's own setting; G12: set only by TienLen.Admin
+    field :accept_invites, :boolean, default: true
+    field :muted_until, :utc_datetime
 
     timestamps type: :utc_datetime
   end
@@ -49,6 +52,11 @@ defmodule TienLen.Accounts.User do
   @doc "True if the account is locked (F2)."
   def locked?(%__MODULE__{locked_at: nil}), do: false
   def locked?(%__MODULE__{}), do: true
+
+  @doc "True while an admin mute is running (G12)."
+  def muted?(user, now \\ DateTime.utc_now())
+  def muted?(%__MODULE__{muted_until: nil}, _now), do: false
+  def muted?(%__MODULE__{muted_until: until}, now), do: DateTime.compare(until, now) == :gt
 
   @doc "True for an unlocked admin (AD1)."
   def admin?(%__MODULE__{role: "admin"} = user), do: not locked?(user)

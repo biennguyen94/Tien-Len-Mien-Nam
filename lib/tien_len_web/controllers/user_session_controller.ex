@@ -12,20 +12,29 @@ defmodule TienLenWeb.UserSessionController do
   def create(conn, %{"user" => %{"username" => username, "password" => password} = params}) do
     # F8; IP counting can be turned off (tests share 127.0.0.1)
     ip = if Application.get_env(:tien_len, :throttle_by_ip, true), do: conn.remote_ip
+    # G10: a failed login keeps the room link to come back to
+    back =
+      case UserAuth.safe_next(params["next"]) do
+        nil -> ~p"/"
+        next -> ~p"/?#{[next: next]}"
+      end
 
     with :ok <- TienLen.LoginThrottle.check(username, ip),
          %Accounts.User{} = user <- Accounts.authenticate(username, password) do
       if Accounts.User.locked?(user) do
-        conn |> put_flash(:error, "Tài khoản đã bị khóa") |> redirect(to: ~p"/")
+        conn |> put_flash(:error, "Tài khoản đã bị khóa") |> redirect(to: back)
       else
         TienLen.LoginThrottle.success(username)
-        conn |> put_flash(:info, welcome(params, user)) |> UserAuth.log_in_user(user)
+
+        conn
+        |> put_flash(:info, welcome(params, user))
+        |> UserAuth.log_in_user(user, params["next"])
       end
     else
       {:error, :throttled} ->
         conn
         |> put_flash(:error, "Đăng nhập sai quá nhiều lần. Thử lại sau 15 phút.")
-        |> redirect(to: ~p"/")
+        |> redirect(to: back)
 
       nil ->
         TienLen.LoginThrottle.failure(username, ip)
@@ -34,7 +43,7 @@ defmodule TienLenWeb.UserSessionController do
         conn
         |> put_flash(:error, "Sai tài khoản hoặc mật khẩu")
         |> put_flash(:login_username, String.slice(to_string(username), 0, 20))
-        |> redirect(to: ~p"/")
+        |> redirect(to: back)
     end
   end
 

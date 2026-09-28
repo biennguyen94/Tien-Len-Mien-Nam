@@ -30,7 +30,12 @@ defmodule TienLenWeb.CoinHistoryLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+    >
       <h1 class="text-xl font-bold">Lịch sử coin</h1>
       <p class="text-sm text-base-content/70">
         Coin chỉ dùng trong game: không nạp, không rút, không chuyển cho người khác.

@@ -25,7 +25,13 @@ defmodule TienLenWeb.Admin.UsersLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <h1 class="text-xl font-bold">Người chơi</h1>
       <.admin_nav active={:users} />
       <form id="user-search" phx-submit="search" class="flex gap-2">

@@ -41,7 +41,9 @@ defmodule TienLen.Room do
             stake: 0,
             game_no: 0,
             # player ids removed by an admin: they cannot join this room again (AD6)
-            banned: MapSet.new()
+            banned: MapSet.new(),
+            # IV2 / G11: hidden from the lobby list, joined by invite or link
+            private: false
 
   @type player_id :: term()
   @type seat :: 0..3
@@ -82,6 +84,17 @@ defmodule TienLen.Room do
          :ok <- if(room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
          :ok <- if(valid_stake?(stake), do: :ok, else: {:error, :invalid_stake}) do
       {:ok, %{room | stake: stake}, [{:stake_changed, stake}]}
+    end
+  end
+
+  @doc "The host makes the room private or public, while waiting (G11)."
+  @spec set_private(t(), player_id(), term()) :: result()
+  def set_private(room, player_id, private?) do
+    with {:ok, seat} <- fetch_seat(room, player_id),
+         :ok <- if(seat == room.host, do: :ok, else: {:error, :not_host}),
+         :ok <- if(room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
+         :ok <- if(is_boolean(private?), do: :ok, else: {:error, :unknown_command}) do
+      {:ok, %{room | private: private?}, [{:private_changed, private?}]}
     end
   end
 
@@ -336,6 +349,7 @@ defmodule TienLen.Room do
       status: room.status,
       games_played: room.games_played,
       stake: room.stake,
+      private: room.private,
       min_balance: min_balance(room),
       players:
         room.seats

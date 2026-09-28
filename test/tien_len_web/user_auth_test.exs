@@ -92,7 +92,7 @@ defmodule TienLenWeb.UserAuthTest do
       conn = sandbox_conn() |> init_test_session(%{"user_id" => user.id})
       {:ok, view, _} = live(conn, ~p"/")
       assert has_element?(view, "#login-form")
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/phong/abc")
+      assert {:error, {:redirect, %{to: "/?next=%2Fphong%2Fabc"}}} = live(conn, ~p"/phong/abc")
     end
 
     test "the room player id is the user id; two devices of one account share the seat", %{

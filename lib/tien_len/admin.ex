@@ -156,6 +156,58 @@ defmodule TienLen.Admin do
     end
   end
 
+  # -- chat moderation (G12) ------------------------------------------------------------
+
+  @mute_minutes [10, 60, 1440]
+
+  @doc "Mute durations offered (minutes): 10 min, 1 h, 24 h (G12)."
+  def mute_minutes, do: @mute_minutes
+
+  @doc "Mutes a player in every chat for `minutes` (10, 60 or 1440). Audited."
+  def mute(admin_id, target_id, minutes, reason \\ nil) do
+    with {:ok, admin} <- authorize(admin_id),
+         {:ok, target} <- fetch(target_id),
+         :ok <- if(admin.id == target.id, do: {:error, :cannot_mute_self}, else: :ok),
+         :ok <- if(minutes in @mute_minutes, do: :ok, else: {:error, :invalid_duration}) do
+      until = DateTime.utc_now(:second) |> DateTime.add(minutes * 60, :second)
+      {:ok, target} = target |> Ecto.Changeset.change(muted_until: until) |> Repo.update()
+      audit(admin.id, "mute", target.id, %{minutes: minutes}, reason)
+      {:ok, target}
+    end
+  end
+
+  @doc "Ends a mute early. Audited."
+  def unmute(admin_id, target_id) do
+    with {:ok, admin} <- authorize(admin_id),
+         {:ok, target} <- fetch(target_id),
+         :ok <- if(User.muted?(target), do: :ok, else: {:error, :not_muted}) do
+      {:ok, target} = target |> Ecto.Changeset.change(muted_until: nil) |> Repo.update()
+      audit(admin.id, "unmute", target.id, %{})
+      {:ok, target}
+    end
+  end
+
+  @doc """
+  Deletes a chat message, removed live for everyone (G12): `{:lobby, msg_id}` or
+  `{:room, room_id, msg_id}`. The audit row names the author, not the text (CH2).
+  """
+  def delete_message(admin_id, where) do
+    with {:ok, admin} <- authorize(admin_id),
+         {:ok, msg} <- do_delete_message(where) do
+      details =
+        case where do
+          {:lobby, _} -> %{chat: "lobby"}
+          {:room, room_id, _} -> %{chat: "room", room_id: room_id}
+        end
+
+      audit(admin.id, "delete_message", msg.user_id, details)
+      :ok
+    end
+  end
+
+  defp do_delete_message({:lobby, id}), do: TienLen.Chat.Lobby.delete(id)
+  defp do_delete_message({:room, room_id, id}), do: RoomServer.delete_chat(room_id, id)
+
   @doc "Renames a user's display name (moderation)."
   def rename(admin_id, target_id, name) do
     with {:ok, admin} <- authorize(admin_id),
@@ -211,6 +263,7 @@ defmodule TienLen.Admin do
       rooms: length(rooms),
       rooms_playing: Enum.count(rooms, &(&1.status == :playing)),
       players_in_rooms: Enum.sum_by(rooms, & &1.players),
+      online: TienLen.Presence.count(),
       games_today:
         Repo.aggregate(from(g in GameRecord, where: g.finished_at >= ^day_start), :count),
       games_7_days:

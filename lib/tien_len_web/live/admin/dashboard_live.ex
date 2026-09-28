@@ -22,7 +22,13 @@ defmodule TienLenWeb.Admin.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <h1 class="text-xl font-bold">Quản trị</h1>
       <.admin_nav active={:dashboard} />
       <div id="dashboard" class="stats stats-vertical sm:stats-horizontal shadow w-full flex-wrap">
@@ -33,6 +39,12 @@ defmodule TienLenWeb.Admin.DashboardLive do
           <div class="stat-desc">
             +{@stats.registrations_today} hôm nay · {@stats.locked} bị khóa · {@stats.admins} admin
           </div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Đang online</div><div id="stat-online" class="stat-value">
+            {@stats.online}
+          </div>
+          <div class="stat-desc">người có trang đang mở</div>
         </div>
         <div class="stat">
           <div class="stat-title">Phòng đang mở</div><div id="stat-rooms" class="stat-value">

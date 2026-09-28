@@ -16,7 +16,13 @@ defmodule TienLenWeb.Admin.AuditLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <h1 class="text-xl font-bold">Nhật ký quản trị</h1>
       <.admin_nav active={:audit} />
       <table id="audit" class="table table-sm table-zebra">

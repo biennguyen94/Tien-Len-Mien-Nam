@@ -36,6 +36,7 @@ defmodule TienLenWeb.Layouts do
   attr :wide, :boolean, default: false, doc: "use the full width (game table)"
   attr :current_user, :any, default: nil, doc: "the logged-in user, if any"
   attr :announcement, :string, default: nil, doc: "lobby announcement (AD9)"
+  attr :social, :map, default: nil, doc: "private chat panel and invite popup (G7, G8)"
 
   def app(assigns) do
     ~H"""
@@ -96,6 +97,7 @@ defmodule TienLenWeb.Layouts do
       </div>
     </main>
 
+    <TienLenWeb.Social.panel :if={@social} social={@social} />
     <.flash_group flash={@flash} />
     """
   end

@@ -53,7 +53,20 @@ defmodule TienLenWeb.Text do
     kicked: "Bạn đã bị mời ra khỏi phòng này",
     announcement_too_long: "Thông báo tối đa 300 ký tự",
     wrong_password: "Mật khẩu hiện tại không đúng",
-    throttled: "Đăng nhập sai quá nhiều lần. Thử lại sau 15 phút."
+    throttled: "Đăng nhập sai quá nhiều lần. Thử lại sau 15 phút.",
+    invalid_message: "Tin nhắn phải có 1–200 ký tự",
+    muted: "Bạn đang bị cấm chat",
+    chat_too_fast: "Bạn gửi tin quá nhanh, chờ vài giây",
+    not_online: "Người này không online",
+    invites_off: "Người này không nhận lời mời",
+    invite_pending: "Người này đang có lời mời khác",
+    target_busy: "Người này đang ở trong phòng",
+    invite_too_fast: "Bạn mời quá nhiều, chờ một chút",
+    invite_expired: "Lời mời đã hết hạn",
+    not_enough_coins_to_join: "Bạn không đủ coin cho mức cược của phòng này",
+    cannot_mute_self: "Không thể tự cấm chat mình",
+    not_muted: "Người này không bị cấm chat",
+    invalid_duration: "Thời hạn không hợp lệ"
   }
 
   @types %{

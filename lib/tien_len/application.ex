@@ -18,6 +18,12 @@ defmodule TienLen.Application do
        end},
       TienLen.LoginThrottle,
       {Phoenix.PubSub, name: TienLen.PubSub},
+      # chat and invites (CH1–IV3): in memory only
+      TienLen.Presence,
+      TienLen.RateLimit,
+      TienLen.Chat.Lobby,
+      TienLen.Chat.Private,
+      TienLen.Invites,
       # One TienLen.RoomServer per room, looked up by room id.
       {Registry, keys: :unique, name: TienLen.RoomRegistry},
       {DynamicSupervisor, name: TienLen.RoomSupervisor, strategy: :one_for_one},

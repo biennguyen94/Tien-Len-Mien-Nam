@@ -96,7 +96,10 @@ defmodule TienLen.Lobby do
   """
   def room_view(room_id, player_id), do: RoomServer.view(room_id, player_id)
 
-  @doc "Summaries of all running rooms: joinable rooms first, then by id."
+  @doc "Rooms shown in the lobby list: private rooms are hidden (G11)."
+  def public_rooms, do: Enum.reject(list_rooms(), & &1.private)
+
+  @doc "Summaries of all running rooms, private ones included: joinable first, then by id."
   @spec list_rooms() :: [summary()]
   def list_rooms do
     TienLen.RoomRegistry

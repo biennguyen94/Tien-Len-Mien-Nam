@@ -16,8 +16,9 @@ defmodule TienLenWeb.TableLive do
   use TienLenWeb, :live_view
 
   import TienLenWeb.CardComponents
+  import TienLenWeb.ChatComponents
 
-  alias TienLen.{Card, Lobby, RoomServer}
+  alias TienLen.{Card, Chat, Invites, Lobby, Presence, RoomServer}
   alias TienLenWeb.Text
 
   @impl true
@@ -31,6 +32,12 @@ defmodule TienLenWeb.TableLive do
       |> assign(:checks, %{})
       |> assign(:deadline, nil)
       |> assign(:now, now())
+      # room chat (G4), invite list (G8)
+      |> assign(:chat, [])
+      |> assign(:chat_key, 0)
+      |> assign(:inviting, false)
+      |> assign(:candidates, [])
+      |> assign(:place, nil)
 
     cond do
       not connected?(socket) ->
@@ -43,7 +50,13 @@ defmodule TienLenWeb.TableLive do
           {:ok, _seat} ->
             :timer.send_interval(1_000, :tick)
 
-            {:ok, load(socket)}
+            chat =
+              case Chat.room_history(id, socket.assigns.player_id) do
+                {:ok, msgs} -> msgs
+                _ -> []
+              end
+
+            {:ok, socket |> assign(:chat, chat) |> load()}
 
           {:error, reason} ->
             {:ok, socket |> put_flash(:error, Text.reason(reason)) |> push_navigate(to: ~p"/")}
@@ -91,6 +104,43 @@ defmodule TienLenWeb.TableLive do
     act(socket, &RoomServer.set_stake(&1, &2, stake))
   end
 
+  # G4: room chat, also during a game (CH4)
+  def handle_event("chat_send", %{"text" => text}, socket) do
+    case Chat.send_room(socket.assigns.room_id, socket.assigns.player_id, text) do
+      :ok -> {:noreply, update(socket, :chat_key, &(&1 + 1))}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
+    end
+  end
+
+  # G8: the invite list
+  def handle_event("toggle_invite", _params, socket) do
+    inviting = !socket.assigns.inviting
+
+    {:noreply,
+     socket
+     |> assign(:inviting, inviting)
+     |> assign(
+       :candidates,
+       if(inviting, do: Invites.candidates(socket.assigns.player_id), else: [])
+     )}
+  end
+
+  def handle_event("invite", %{"id" => id}, socket) do
+    with {id, ""} <- Integer.parse(to_string(id)),
+         {:ok, invite} <- Invites.invite(socket.assigns.player_id, id, socket.assigns.room_id) do
+      {:noreply, put_flash(socket, :info, "Đã mời #{invite.to_name}")}
+    else
+      {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  # G11: the host hides the room from the lobby list, or shows it again
+  def handle_event("toggle_private", _params, socket) do
+    private? = !(socket.assigns.view && socket.assigns.view.private)
+    act(socket, &RoomServer.set_private(&1, &2, private?))
+  end
+
   def handle_event("leave", _params, socket) do
     Lobby.leave_room(socket.assigns.room_id, socket.assigns.player_id)
     {:noreply, push_navigate(socket, to: ~p"/")}
@@ -121,6 +171,17 @@ defmodule TienLenWeb.TableLive do
   end
 
   def handle_info({:room_updated, _id, _version, _events}, socket), do: {:noreply, load(socket)}
+
+  def handle_info({:room_chat, _id, msg}, socket) do
+    # only a seated player (who has a view) reads the room chat (G4)
+    if socket.assigns.view,
+      do: {:noreply, update(socket, :chat, &Enum.take(&1 ++ [msg], -50))},
+      else: {:noreply, socket}
+  end
+
+  def handle_info({:room_chat_deleted, _id, msg_id}, socket),
+    do: {:noreply, update(socket, :chat, &Enum.reject(&1, fn m -> m.id == msg_id end))}
+
   def handle_info(:tick, socket), do: {:noreply, assign(socket, :now, now())}
   def handle_info(_unexpected, socket), do: {:noreply, socket}
 
@@ -137,7 +198,19 @@ defmodule TienLenWeb.TableLive do
         socket
         |> assign(view: view, selected: selected, deadline: deadline, now: now())
         |> refresh_checks()
+        |> track_place(view)
     end
+  end
+
+  # G6: where this player is, for the online list (only when it changes)
+  defp track_place(socket, view) do
+    place = if view.status == :playing, do: "playing", else: "room"
+
+    if place != socket.assigns.place do
+      Presence.move(self(), socket.assigns.current_user, place, socket.assigns.room_id)
+    end
+
+    assign(socket, :place, place)
   end
 
   # Server-side dry runs for the buttons (no rule logic in the browser).
@@ -205,7 +278,12 @@ defmodule TienLenWeb.TableLive do
   @impl true
   def render(%{view: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+    >
       <p id="joining" class="text-center text-base-content/70">Đang vào phòng…</p>
     </Layouts.app>
     """
@@ -215,7 +293,13 @@ defmodule TienLenWeb.TableLive do
     assigns = assign(assigns, :secs, seconds_left(assigns))
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} announcement={@announcement} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      announcement={@announcement}
+      social={@social}
+      wide
+    >
       <div class="flex flex-wrap items-center justify-between gap-2">
         <p>
           Phòng <span id="room-code" class="font-mono font-semibold">{@room_id}</span>
@@ -227,6 +311,15 @@ defmodule TienLenWeb.TableLive do
           </span>
         </p>
         <div class="flex items-center gap-1">
+          <span :if={@view.private} id="private-badge" class="badge badge-info">Riêng tư</span>
+          <button
+            id="copy-link"
+            phx-hook="CopyLink"
+            data-url={url(~p"/phong/#{@room_id}")}
+            class="btn btn-ghost btn-sm"
+          >
+            Chép link
+          </button>
           <button
             id="leave"
             phx-click="leave"
@@ -262,7 +355,12 @@ defmodule TienLenWeb.TableLive do
       </div>
 
       <.results :if={@view.status == :waiting and @view.game} view={@view} />
-      <.waiting :if={@view.status == :waiting} view={@view} />
+      <.waiting
+        :if={@view.status == :waiting}
+        view={@view}
+        inviting={@inviting}
+        candidates={@candidates}
+      />
 
       <section :if={@view.status == :playing} class="space-y-3">
         <p
@@ -312,6 +410,16 @@ defmodule TienLenWeb.TableLive do
           </button>
         </div>
       </section>
+
+      <.chat_box
+        id="room-chat"
+        title="Chat phòng"
+        messages={@chat}
+        me={@player_id}
+        send_event="chat_send"
+        phrases
+        key={@chat_key}
+      />
     </Layouts.app>
     """
   end
@@ -412,6 +520,8 @@ defmodule TienLenWeb.TableLive do
   end
 
   attr :view, :map, required: true
+  attr :inviting, :boolean, default: false
+  attr :candidates, :list, default: []
 
   defp waiting(assigns) do
     assigns = assign(assigns, :connected, Enum.count(assigns.view.players, & &1.connected))
@@ -448,6 +558,47 @@ defmodule TienLenWeb.TableLive do
         />
         <button type="submit" class="btn btn-sm">Đổi cược</button>
       </form>
+
+      <div class="flex flex-wrap justify-center gap-2">
+        <button
+          :if={length(@view.players) < 4}
+          id="toggle-invite"
+          phx-click="toggle_invite"
+          class="btn btn-sm btn-outline"
+        >
+          {if @inviting, do: "Đóng danh sách mời", else: "Mời người chơi"}
+        </button>
+        <button
+          :if={@view.host == @view.me}
+          id="toggle-private"
+          phx-click="toggle_private"
+          class="btn btn-sm btn-ghost"
+        >
+          {if @view.private, do: "Hiện phòng trong sảnh", else: "Chuyển sang riêng tư"}
+        </button>
+      </div>
+
+      <ul
+        :if={@inviting}
+        id="invite-list"
+        class="mx-auto max-w-sm divide-y divide-base-300 rounded-box bg-base-200 text-left"
+      >
+        <li :if={@candidates == []} class="p-2 text-sm text-base-content/60">
+          Không có ai đang rảnh để mời. Hãy gửi link phòng (nút "Chép link").
+        </li>
+        <li :for={c <- @candidates} id={"candidate-#{c.id}"} class="p-2 flex items-center gap-2">
+          <span class={["flex-1 truncate", c.invites_off && "text-base-content/40"]}>{c.name}</span>
+          <span :if={c.invites_off} class="text-xs text-base-content/50">không nhận lời mời</span>
+          <button
+            :if={!c.invites_off}
+            phx-click="invite"
+            phx-value-id={c.id}
+            class="btn btn-xs btn-primary"
+          >
+            Mời
+          </button>
+        </li>
+      </ul>
 
       <p
         :if={@view.stake > 0 and (@view.balances[@view.me] || 0) < @view.min_balance}
