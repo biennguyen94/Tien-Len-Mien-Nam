@@ -42,6 +42,7 @@ Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 - `docs/RISKS.md` — original security issues and bugs (not to be ported), porting risks
 - `docs/HUONG_DAN_NGUOI_CHOI.md` — player guide (Vietnamese): how to play, coins, features
 - `docs/HUONG_DAN_ADMIN.md` — admin guide (Vietnamese): admin pages, settings, operations
+- `docs/LENH_HUU_ICH.md` — useful commands (Vietnamese, for learners): mix, IEx, Ecto/psql, tests, curl, Docker, git
 - `docs/DEPLOY.md` — Docker deployment on WSL (port 4020), environment variables, operations
 - `docs/RESEARCH.md` — full reverse-engineering report of the original (background; its §21/§23–25 are historical)
 
