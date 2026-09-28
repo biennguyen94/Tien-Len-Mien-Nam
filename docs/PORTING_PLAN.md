@@ -250,3 +250,7 @@ Tien-Len-Mien-Nam/
 ## Phase 39 — Phone layout, part 2 (M3) — DONE (2026-09-28)
 
 - [x] ☰ header, lobby / table / spectator phone layouts, tables in scroll boxes, 💬 placement; `tools/mobile-audit` shows 83/83 OK.
+
+## Phase 40 — Cards in hand: selection and overlap (M4) — DONE (2026-09-28)
+
+- [x] One adaptive row at every width; `relative` slots so a lifted card never covers its neighbour; ring on the image; `hand_audit.js` clean at 360–1280 px.

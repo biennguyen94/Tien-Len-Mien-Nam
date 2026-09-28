@@ -450,19 +450,33 @@ defmodule TienLenWeb.TableLive do
           Nước đầu phải có {Text.card(@view.game.must_include)}
         </p>
 
-        <div id="hand" class="flex flex-nowrap sm:flex-wrap justify-center sm:gap-1 pt-4 px-1">
+        <%!-- M4: one row at every width. Each card slot shrinks to share the free space
+             (the last card keeps its full width), so cards overlap only when they must and
+             by as little as possible; the card image overflows under the next slot.
+             Every slot is `relative`: a lifted (translated) card would otherwise be painted
+             above its right-hand neighbour and hide its corner. The selection ring is on
+             the image, not on the (narrow) slot. --%>
+        <div id="hand" class="flex w-full justify-center pt-4 px-1">
           <button
             :for={card <- sorted_hand(@view.game.hand, @sort)}
             id={"card-" <> Card.to_code(card)}
             phx-click="toggle"
             phx-value-card={Card.to_code(card)}
             class={[
-              "transition-transform -ml-6 first:ml-0 sm:ml-0 shrink-0",
-              card in @selected && "-translate-y-3 ring-2 ring-primary rounded-md"
+              "relative min-w-0 basis-0 flex-1 max-w-[52px] sm:max-w-[68px] text-left",
+              "last:flex-none last:basis-auto last:w-12 sm:last:w-16",
+              "transition-transform",
+              card in @selected && "-translate-y-3"
             ]}
             aria-pressed={to_string(card in @selected)}
           >
-            <.card card={card} class="w-12 sm:w-16" />
+            <.card
+              card={card}
+              class={
+                "w-12 sm:w-16 max-w-none " <>
+                  if(card in @selected, do: "ring-2 ring-primary ring-offset-1", else: "")
+              }
+            />
           </button>
         </div>
 

@@ -107,6 +107,10 @@ docker compose ps                                                               
 
 ## Verification
 
+### Phase 40 (2026-09-28), cards in hand
+
+- Redeployed (no migration). `hand_audit.js` on the dev server is clean at 360–1280 px.
+
 ### Phase 39 (2026-09-28), phone layout
 
 - Redeployed (no migration). The logged-out lobby had no horizontal overflow at 360/390/412 px. The full audit (every page, logged in) was run on the dev server with `tools/mobile-audit`: 83/83 OK.

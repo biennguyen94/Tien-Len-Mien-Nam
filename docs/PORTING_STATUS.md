@@ -43,6 +43,7 @@ Last updated: 2026-09-28
 | 37 | Spectators | **DONE** (2026-09-28) |
 | 38 | Replays; deploy | **DONE** (2026-09-28) |
 | 39 | Phone layout, part 2 (header menu, all pages) | **DONE** (2026-09-28) |
+| 40 | Cards in hand: selection and overlap | **DONE** (2026-09-28) |
 
 Current architecture (modules, processes, database, routes, visibility): `ARCHITECTURE.md` Part 2. What was delivered and verified in each phase: the results sections below.
 
@@ -303,6 +304,7 @@ The owner reported that the site was fine on a laptop but not on phones (360–4
 | # | Decision |
 |---|---|
 | M3 | **No horizontal scroll at 360 / 390 / 412 px on any page**, laptop unchanged. Tailwind mobile-first classes with `sm:` (≥ 640 px) for the laptop layout, no custom CSS, no `overflow-x: hidden` on `body`. Details:<br>• the header on phones is the title, the coin badge and a **☰ menu** (all links, profile, logout, theme); the friend-request count is a dot on ☰;<br>• the lobby greeting and account links are one wrapping row;<br>• mission rewards never break; the progress bar goes under the title on phones;<br>• the create-room form is stacked on phones (input and button full width, note below);<br>• room rows wrap;<br>• the table shows the 3 opponents in one row above a full-width centre;<br>• wide tables scroll inside their own box (admin); the player-facing leaderboard fits by hiding "Số ván" on phones;<br>• the 💬 button sits in the screen corner with page bottom padding, and on the table it is icon-only and above the action bar. |
+| M4 | **Cards in hand** (owner's spec + owner's remark that a narrowed laptop window behaves like a phone):<br>• a selected card is shown only by a 12 px lift and a ring, never by stacking order or scaling;<br>• every card's corner stays visible and clickable;<br>• one row at **every** width, where the overlap is computed from the free space: at least 22 px shown per card, no overlap when there is room; no two rows;<br>• room above the hand for the lift. |
 
 ### Project decisions
 
@@ -1248,6 +1250,35 @@ The header's right-hand block had `flex-none`: it never shrank, so it was always
 ### NOT VERIFIED
 
 - A real phone (iOS Safari / Android Chrome). Headless Chromium lacks emoji fonts, so the emoji show as boxes in the screenshots; that is not a bug.
+
+## Phase 40 results — cards in hand (2026-09-28)
+
+### Root cause
+
+The code set no `z-index`. The lift (`-translate-y-3`) is a CSS **transform**, and a transformed element is painted in a higher layer than its non-positioned siblings. So the selected card was drawn over its right-hand neighbour: the neighbour's corner disappeared, and clicks on it hit the selected card. Playwright reproduced it: the click on the neighbour was "intercepted" by the selected card.
+
+On a narrowed laptop window the same happened below 640 px. Between 640 and ~900 px the hand wrapped to two rows, and a lifted card could overlap the row above.
+
+### Delivered
+
+- `#hand` is one row at every width. Every card slot is `relative`, so all slots are painted in DOM order and a lifted card stays under its right-hand neighbour.
+  - Slots shrink (`flex-1 basis-0 min-w-0`, max card + 4 px); the last slot keeps the full card width; the image overflows under the next slot (`max-w-none`).
+  - The overlap therefore adapts to the width.
+- The selection is the lift plus `ring-2 ring-primary` on the image (the slot is only the visible strip). No `z-index`, no scale.
+- `tools/mobile-audit/hand_audit.js`.
+
+### VERIFIED
+
+- Before (360 px): selecting 7♦ hid 8♠'s corner, and a click on 8♠ could not reach it.
+- After, `hand_audit.js` at **360, 390, 412, 450, 640, 768, 1024, 1280 px**, with 0, 1, 2 and 3 adjacent cards selected: **no card covered, selected cards lifted, all 13 cards selectable by their visible strip, no problems.**
+
+  | Width (px) | 360 | 390 | 412 | 450 | 640 | 768 | ≥ 1024 |
+  |---|---|---|---|---|---|---|---|
+  | Shown per card (px) | 23 | 26 | 28 | 31 | 43 | 54 | 68 (no overlap) |
+
+  Lifted cards stay ≥ 16 px below the seats or the "Nước đầu phải có…" line.
+- The page audit is still 83/83 OK. `mix precommit`: 417 passed (new markup test: every slot is `relative`, the ring is on the image, no z-index or scale classes).
+- Screenshots at 360 / 640 / 1280 px reviewed. Redeployed; no errors in the log.
 
 ## Environment state
 
