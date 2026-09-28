@@ -59,6 +59,16 @@ defmodule TienLen.RoomServerTest do
       assert is_integer(view.turn_ms_left) and view.turn_ms_left > 0
     end
 
+    test "a room that dies during a call answers :room_not_found instead of crashing the caller" do
+      id = start!()
+      pid = RoomServer.whereis(id)
+      :sys.suspend(pid)
+      caller = Task.async(fn -> RoomServer.summary(id) end)
+      Process.sleep(20)
+      Process.exit(pid, :kill)
+      assert Task.await(caller) == {:error, :room_not_found}
+    end
+
     test "unknown rooms answer :room_not_found" do
       assert RoomServer.join("nope", :p1, "x") == {:error, :room_not_found}
       assert RoomServer.view("nope", :p1) == {:error, :room_not_found}

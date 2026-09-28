@@ -51,6 +51,15 @@ defmodule TienLenWeb.Layouts do
         <.link :if={@current_user} navigate={~p"/lich-su"} class="btn btn-ghost btn-sm">
           Lịch sử
         </.link>
+        <.link
+          :if={@current_user}
+          navigate={~p"/lich-su-coin"}
+          id="my-coins"
+          class="badge badge-warning badge-lg tabular-nums"
+          title="Lịch sử coin"
+        >
+          🪙 {TienLenWeb.Text.coins(@current_user.coins)}
+        </.link>
         <span :if={@current_user} id="current-user" class="text-sm">
           {@current_user.display_name}
           <span class="text-base-content/60">(@{@current_user.username})</span>

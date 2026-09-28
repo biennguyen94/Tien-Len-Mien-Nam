@@ -45,4 +45,7 @@ Details and code references: `RESEARCH.md` §15–19.
 | P9 | **Card artwork licence**: the original's SVGs are by Adrian Kennard. | **Resolved (2026-09-27):** released under CC0 public domain (https://www.me.uk/cards/); credit kept in README. |
 | P10 | **Password guessing**: no login rate limiting yet (Y7). | Accepted for the first version. Candidate fix: throttle failed logins per username and IP. |
 | P11 | **Stateless sessions**: logout clears the cookie on that browser, but a copied cookie stays valid (no server-side session list). | Accepted (as in open-mu-web R12). A users-sessions table would allow "log out everywhere". |
+| P12 | **Coin farming** with several accounts (register → 1,000 each, lose games on purpose to a main account). | Accepted for virtual coins without cash value (C1). Candidate mitigations: per-IP registration limits, excluding games between the same accounts from rankings. |
+| P13 | **A settlement write fails** (database down during a game). | Logged, play continues, and the coins of that game are not moved (Y6-style). Keys make a later manual retry safe. |
+| P14 | **Intermittent test failures** under full-suite concurrency. Two were found (one real bug in `RoomServer.call/2`, one timing-sensitive test) and fixed. | Accepted as monitored (owner, 2026-09-28): no further failure in the repeated runs that followed. Hunt new ones with a repeated `mix test` loop that logs the seed. |
 

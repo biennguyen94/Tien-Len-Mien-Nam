@@ -9,7 +9,7 @@ Read `docs/` before doing any work. Do not re-analyse the original repo from scr
 | | Stack | Status |
 |---|---|---|
 | **Original** | React 16 + boardgame.io 0.39 + socket.io + Koa (Node), at `/home/bien_nguyen/tien-len` (git `86b2621`) | Background reference only. **Not** the source of truth for rules. Never modify. |
-| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub, PostgreSQL (Ecto) for accounts and results | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root (O1). A database was added in Phase 11 (A4 supersedes O2). All 14 phases done: the game (1–10), PostgreSQL (11), accounts (12), results + leaderboard `/bang-xep-hang` + history `/lich-su` (13), **deployed with its database** as compose project `tien-len` on port 4020 (14, `docs/DEPLOY.md`). Remaining: a manual check in a real browser. See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
+| **Target** | Elixir 1.20.4 / OTP 28 + Phoenix 1.8 + LiveView, OTP processes per room, PubSub, PostgreSQL (Ecto) for accounts and results | This repo, Mix app `:tien_len` (modules `TienLen` / `TienLenWeb`) at the root (O1). A database was added in Phase 11 (A4 supersedes O2). All 18 phases done: the game (1–10), PostgreSQL (11), accounts (12), results + leaderboard + history (13), deploy with the database (14), **virtual coins** with stakes, chặt heo / thối heo settlement, daily bonus / relief (15–18, RULES T19–T25). Deployed as compose project `tien-len` on port 4020 (`docs/DEPLOY.md`). Coins change only through `TienLen.Economy` (ledger, transactions, idempotency keys). Remaining: a manual check in a real browser. See `docs/PORTING_STATUS.md` and `AGENTS.md`. |
 
 Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 - Server-authoritative.
@@ -35,7 +35,7 @@ Key decisions (full log in `docs/PORTING_STATUS.md` → Decisions):
 
 ## Docs map
 
-- `docs/RULES.md` — **target rulebook** (T1–T18), beat matrix, instant-win hands, timeouts, Vietnamese terms
+- `docs/RULES.md` — **target rulebook** (T1–T25, incl. coins), beat matrix, instant-win hands, timeouts, Vietnamese terms
 - `docs/ARCHITECTURE.md` — original architecture (summary) and target OTP/Phoenix architecture, state model, state machine
 - `docs/PORTING_PLAN.md` — phases with checklists and acceptance criteria
 - `docs/PORTING_STATUS.md` — current status, **decision log**, interpretations, open questions (update as work progresses)

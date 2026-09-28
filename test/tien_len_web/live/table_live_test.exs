@@ -162,6 +162,11 @@ defmodule TienLenWeb.TableLiveTest do
         :invalid_name,
         :too_many_rooms,
         :unknown_request,
+        :not_enough_coins,
+        :invalid_stake,
+        :already_claimed,
+        :not_eligible,
+        :not_found,
         :no_game,
         :unknown_command
       ]

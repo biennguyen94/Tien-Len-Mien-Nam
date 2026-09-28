@@ -99,6 +99,7 @@ defmodule TienLen.LobbyTest do
                :joinable,
                :max_players,
                :players,
+               :stake,
                :status
              ]
 

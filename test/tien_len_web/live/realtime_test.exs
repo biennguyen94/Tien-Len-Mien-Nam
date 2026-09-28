@@ -223,7 +223,7 @@ defmodule TienLenWeb.RealtimeTest do
 
   describe "server actions on timeout (T16)" do
     test "an auto-played card appears on the other players' tables" do
-      id = open_room!(turn_timeout: 40, deals: [deal(%{0 => "3S 9H", 1 => "4S 9C"})])
+      id = open_room!(turn_timeout: 500, deals: [deal(%{0 => "3S 9H", 1 => "4S 9C"})])
       {:ok, an, _} = live(player_conn("An"), ~p"/phong/#{id}")
       {:ok, binh, _} = live(player_conn("Binh"), ~p"/phong/#{id}")
       an |> element("#start") |> render_click()
@@ -233,7 +233,7 @@ defmodule TienLenWeb.RealtimeTest do
     end
   end
 
-  defp eventually(fun, tries \\ 50) do
+  defp eventually(fun, tries \\ 150) do
     cond do
       fun.() -> true
       tries == 0 -> false

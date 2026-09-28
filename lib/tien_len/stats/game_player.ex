@@ -3,11 +3,11 @@ defmodule TienLen.Stats.GamePlayer do
   use Ecto.Schema
 
   schema "game_players" do
-    belongs_to(:game, TienLen.Stats.GameRecord)
-    belongs_to(:user, TienLen.Accounts.User)
-    field(:seat, :integer)
-    field(:place, :integer)
-    field(:won, :boolean)
-    field(:removed, :boolean, default: false)
+    belongs_to :game, TienLen.Stats.GameRecord
+    belongs_to :user, TienLen.Accounts.User
+    field :seat, :integer
+    field :place, :integer
+    field :won, :boolean
+    field :removed, :boolean, default: false
   end
 end

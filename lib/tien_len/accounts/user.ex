@@ -11,12 +11,16 @@ defmodule TienLen.Accounts.User do
   import Ecto.Changeset
 
   schema "users" do
-    field(:username, :string)
-    field(:display_name, :string)
-    field(:password, :string, virtual: true, redact: true)
-    field(:hashed_password, :string, redact: true)
+    field :username, :string
+    field :display_name, :string
+    field :password, :string, virtual: true, redact: true
+    field :hashed_password, :string, redact: true
+    # coins (C1–C10): changed only by TienLen.Economy, never cast from user input
+    field :coins, :integer, default: 0
+    field :daily_bonus_on, :date
+    field :relief_on, :date
 
-    timestamps(type: :utc_datetime)
+    timestamps type: :utc_datetime
   end
 
   @username ~r/^[a-z0-9_.]{3,20}$/

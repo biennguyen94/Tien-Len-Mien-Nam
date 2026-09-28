@@ -25,7 +25,9 @@ defmodule TienLen.Game do
 
   `{:played, seat, combo}`, `{:chopped, seat, combo}` (out of turn), `{:passed, seat}`,
   `{:timed_out, seat}`, `{:finished, seat, position}`, `{:removed, seat}`,
-  `{:round_ended, leader}`, `{:lead_moved, leader}`, `{:game_over, ranking}`.
+  `{:round_ended, leader}`, `{:lead_moved, leader}`, `{:game_over, ranking}`,
+  `{:chop_chain, %{payer, payee, units, chops}}` (when a round's chop chain ends, E3/T23;
+  `units` = value of the chopped 2s in stakes × number of chops).
 
   ## Error reasons
 
@@ -48,7 +50,9 @@ defmodule TienLen.Game do
             finished: [],
             removed: [],
             instant_winners: [],
-            ranking: nil
+            ranking: nil,
+            # chop chain of the current round (E3): nil or %{units, chops, payer, payee}
+            chain: nil
 
   @type seat :: term()
   @type centre :: nil | %{combo: Combination.t(), owner: seat(), chop_context: boolean()}
@@ -354,6 +358,7 @@ defmodule TienLen.Game do
     game = %{
       game
       | hands: Map.put(game.hands, seat, hand),
+        chain: update_chain(game.centre, game.chain, seat, context),
         centre: %{combo: combo, owner: seat, chop_context: context},
         opening_card: nil
     }
@@ -394,6 +399,7 @@ defmodule TienLen.Game do
     active = active_seats(game)
     leader = if owner in active, do: owner, else: next_in(game.seats, owner, active)
 
+    {game, events} = close_chain(game, events)
     game = %{game | phase: :lead, current: leader, centre: nil, passed: MapSet.new()}
     {:ok, game, events ++ [{:round_ended, leader}]}
   end
@@ -406,7 +412,38 @@ defmodule TienLen.Game do
 
   defp game_over?(game), do: length(active_seats(game)) <= 1
 
+  @doc """
+  Value of the 2s among `cards`, in stakes (C6): 2♠/2♣ = 1, 2♦/2♥ = 2. Other cards are 0.
+  """
+  @spec twos_units([Card.t()]) :: non_neg_integer()
+  def twos_units(cards) do
+    Enum.sum_by(cards, fn
+      %Card{rank: 15, suit: suit} when suit in [:spades, :clubs] -> 1
+      %Card{rank: 15} -> 2
+      _ -> 0
+    end)
+  end
+
+  # E3: a play that turns a normal centre into chop context chops the 2s and starts a chain;
+  # every play on a chop-context centre is one more chop. The payer is always the owner of
+  # the combination chopped last, the payee the last chopper.
+  defp update_chain(%{chop_context: false, combo: chopped, owner: owner}, _chain, seat, true),
+    do: %{units: twos_units(chopped.cards), chops: 1, payer: owner, payee: seat}
+
+  defp update_chain(%{chop_context: true, owner: owner}, %{} = chain, seat, _context),
+    do: %{chain | chops: chain.chops + 1, payer: owner, payee: seat}
+
+  defp update_chain(_centre, chain, _seat, _context), do: chain
+
+  defp close_chain(%{chain: nil} = game, events), do: {game, events}
+
+  defp close_chain(%{chain: chain} = game, events) do
+    event = {:chop_chain, %{chain | units: chain.units * chain.chops}}
+    {%{game | chain: nil}, events ++ [event]}
+  end
+
   defp finish(game, events) do
+    {game, events} = close_chain(game, events)
     last = active_seats(game)
 
     ranking =

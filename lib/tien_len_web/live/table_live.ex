@@ -80,6 +80,17 @@ defmodule TienLenWeb.TableLive do
   def handle_event("pass", _params, socket), do: act(socket, &RoomServer.pass/2)
   def handle_event("start", _params, socket), do: act(socket, &Lobby.start_game/2)
 
+  # The host proposes a stake; the room server validates it (host only, between games, C3).
+  def handle_event("set_stake", %{"stake" => stake}, socket) do
+    stake =
+      case Integer.parse(to_string(stake) |> String.trim()) do
+        {n, ""} -> n
+        _ -> :invalid
+      end
+
+    act(socket, &RoomServer.set_stake(&1, &2, stake))
+  end
+
   def handle_event("leave", _params, socket) do
     Lobby.leave_room(socket.assigns.room_id, socket.assigns.player_id)
     {:noreply, push_navigate(socket, to: ~p"/")}
@@ -198,6 +209,11 @@ defmodule TienLenWeb.TableLive do
         <p>
           Phòng <span id="room-code" class="font-mono font-semibold">{@room_id}</span>
           <span class="text-base-content/60">· ván đã chơi: {@view.games_played}</span>
+          <span id="stake" class="badge badge-outline">
+            {if @view.stake == 0,
+              do: "Chơi vui",
+              else: "Cược #{Text.coins(@view.stake)} (cần #{Text.coins(@view.min_balance)} coin)"}
+          </span>
         </p>
         <div class="flex items-center gap-1">
           <button
@@ -316,6 +332,19 @@ defmodule TienLenWeb.TableLive do
           <span :if={@seat == @view.me} class="text-xs text-base-content/60">(bạn)</span>
           <span :if={!@player.connected} class="badge badge-ghost badge-xs">mất kết nối</span>
         </p>
+        <p :if={@view.balances[@seat]} class="text-xs tabular-nums">
+          🪙 {Text.coins(@view.balances[@seat])}
+          <span
+            :if={(@view.coin_deltas[@seat] || 0) != 0}
+            id={"delta-#{@seat}"}
+            class={[
+              "badge badge-xs",
+              if(@view.coin_deltas[@seat] > 0, do: "badge-success", else: "badge-error")
+            ]}
+          >
+            {Text.signed_coins(@view.coin_deltas[@seat])}
+          </span>
+        </p>
         <div
           :if={@game && @seat in @game.seats}
           class="flex items-center justify-center gap-2 text-sm"
@@ -391,6 +420,31 @@ defmodule TienLenWeb.TableLive do
         Cần ít nhất 2 người. Gửi mã phòng <span class="font-mono">{@view.id}</span> cho bạn bè.
       </p>
       <p :if={@view.host != @view.me} class="text-base-content/70">Chờ chủ phòng bắt đầu…</p>
+
+      <form
+        :if={@view.host == @view.me}
+        id="stake-form"
+        phx-submit="set_stake"
+        class="flex items-center justify-center gap-2"
+      >
+        <input
+          type="number"
+          name="stake"
+          min="0"
+          step="1"
+          value={@view.stake}
+          class="input input-bordered input-sm w-32"
+        />
+        <button type="submit" class="btn btn-sm">Đổi cược</button>
+      </form>
+
+      <p
+        :if={@view.stake > 0 and (@view.balances[@view.me] || 0) < @view.min_balance}
+        id="not-eligible"
+        class="text-sm text-warning"
+      >
+        Bạn cần ít nhất {Text.coins(@view.min_balance)} coin để được chia bài ở mức cược này.
+      </p>
     </section>
     """
   end
@@ -410,6 +464,15 @@ defmodule TienLenWeb.TableLive do
           <.card :for={card <- w.hand} card={card} class="w-10" />
         </div>
       </div>
+
+      <ul :if={@view.coin_deltas != %{}} id="coin-results" class="space-y-1">
+        <li :for={{seat, delta} <- Enum.sort(@view.coin_deltas)}>
+          🪙 {(player(@view, seat) || %{name: "?"}).name}:
+          <span class={if(delta > 0, do: "text-success", else: "text-error")}>
+            {Text.signed_coins(delta)}
+          </span>
+        </li>
+      </ul>
 
       <ol id="ranking" class="space-y-1">
         <li :for={{group, i} <- Enum.with_index(@view.game.ranking || [], 1)}>

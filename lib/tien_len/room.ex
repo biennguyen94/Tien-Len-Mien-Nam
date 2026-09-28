@@ -36,7 +36,10 @@ defmodule TienLen.Room do
             last_winner: nil,
             # seat => player id of everyone dealt into the current / last game (kept even if they
             # leave the room mid-game, so results are recorded for the right account)
-            game_players: %{}
+            game_players: %{},
+            # coins (C3, E7): stake S of this room; games started so far (settlement keys)
+            stake: 0,
+            game_no: 0
 
   @type player_id :: term()
   @type seat :: 0..3
@@ -58,7 +61,27 @@ defmodule TienLen.Room do
   @type result :: {:ok, t(), [event()]} | {:error, atom()}
 
   @spec new(term()) :: t()
-  def new(id), do: %__MODULE__{id: id}
+  def new(id, stake \\ 0), do: %__MODULE__{id: id, stake: stake}
+
+  @max_stake 1_000_000_000_000
+
+  @doc "Valid stakes (C3): 0 (for fun) or any integer from 10 up (sanity cap #{@max_stake})."
+  def valid_stake?(stake),
+    do: stake == 0 or (is_integer(stake) and stake >= 10 and stake <= @max_stake)
+
+  @doc "Minimum balance to be dealt in (C9): 10×S."
+  def min_balance(%__MODULE__{stake: stake}), do: 10 * stake
+
+  @doc "The host changes the stake, between games only (E7)."
+  @spec set_stake(t(), player_id(), term()) :: result()
+  def set_stake(room, player_id, stake) do
+    with {:ok, seat} <- fetch_seat(room, player_id),
+         :ok <- if(seat == room.host, do: :ok, else: {:error, :not_host}),
+         :ok <- if(room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
+         :ok <- if(valid_stake?(stake), do: :ok, else: {:error, :invalid_stake}) do
+      {:ok, %{room | stake: stake}, [{:stake_changed, stake}]}
+    end
+  end
 
   # -- membership ---------------------------------------------------------------
 
@@ -134,17 +157,29 @@ defmodule TienLen.Room do
   The host starts a game with the connected seated players (at least 2, R6).
   """
   @spec start_game(t(), player_id(), deal()) :: result()
-  def start_game(room, player_id, deal) do
-    participants =
+  def start_game(room, player_id, deal, balances \\ nil) do
+    connected =
       room.seats
       |> Enum.filter(fn {_seat, p} -> p.connected end)
       |> Enum.map(&elem(&1, 0))
       |> Enum.sort()
 
+    # E7: with a stake, only players with at least 10×S are dealt in. `balances` is
+    # %{player_id => coins}; `nil` means no economy (tests), so nobody is filtered.
+    participants =
+      if room.stake > 0 and is_map(balances),
+        do:
+          Enum.filter(
+            connected,
+            &(Map.get(balances, room.seats[&1].player_id, 0) >= min_balance(room))
+          ),
+        else: connected
+
     with {:ok, seat} <- fetch_seat(room, player_id),
          :ok <- if(seat == room.host, do: :ok, else: {:error, :not_host}),
          :ok <- if(room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
-         :ok <- if(length(participants) >= 2, do: :ok, else: {:error, :not_enough_players}) do
+         :ok <- if(length(connected) >= 2, do: :ok, else: {:error, :not_enough_players}),
+         :ok <- if(length(participants) >= 2, do: :ok, else: {:error, :not_enough_coins}) do
       opts =
         case room.last_winner && seat_of(room, room.last_winner) do
           leader when is_integer(leader) ->
@@ -161,7 +196,14 @@ defmodule TienLen.Room do
         end
 
       game_players = Map.new(participants, &{&1, room.seats[&1].player_id})
-      room = %{room | status: :playing, game: game, game_players: game_players}
+
+      room = %{
+        room
+        | status: :playing,
+          game: game,
+          game_players: game_players,
+          game_no: room.game_no + 1
+      }
 
       events =
         if Game.instant_win?(game),
@@ -269,6 +311,8 @@ defmodule TienLen.Room do
       host: room.host,
       status: room.status,
       games_played: room.games_played,
+      stake: room.stake,
+      min_balance: min_balance(room),
       players:
         room.seats
         |> Enum.sort()

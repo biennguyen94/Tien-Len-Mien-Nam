@@ -15,7 +15,7 @@ Docker host (WSL2)
                      NOT published on the host (reachable only as `db` inside the network)
 ```
 
-- **Kept in PostgreSQL:** accounts and game results (leaderboard, history). They survive restarts and redeploys; verified with `restart` and `down`/`up`.
+- **Kept in PostgreSQL:** accounts, game results (leaderboard, history) and coins (balances, ledger). They survive restarts and redeploys; verified with `restart` and `down`/`up`.
 - **In memory:** rooms and running games (O2). A restart or redeploy ends running games; finished games are already recorded.
 - Open **http://localhost:4020** (WSL forwards localhost to Windows).
 - The dev server (`mix phx.server`) uses port 4010 and the dev database `tien-len-dev-db`, so it can run next to the deploy.
@@ -93,6 +93,17 @@ docker compose ps                                                               
 - Do not publish the database port.
 
 ## Verification
+
+### Phases 15–18 (2026-09-28), coins
+
+- The `add_coins` migration ran at container start (coins column + `coins_not_negative` check, ledger and settlement tables).
+- Through `bin/tien_len rpc`: 3 registrations got 1,000 each. A stake-100 game with a chop chain, a place payment and thối gave 1,100 / 400 / 1,500 (total 3,000), with matching ledger lines.
+- Over HTTP (logged in):
+  - the header shows `🪙 1.500`;
+  - the lobby shows the balance, the daily-bonus button and the stake field;
+  - `/lich-su-coin` lists the ledger lines;
+  - `/bang-xep-hang?tab=giau` ranks by coins.
+- Test accounts removed afterwards. A real account `bien` (registered after the deploy) was left untouched.
 
 ### Phase 14 (2026-09-28), with the database
 

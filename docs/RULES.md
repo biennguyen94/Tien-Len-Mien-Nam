@@ -3,7 +3,7 @@
 Last updated: 2026-09-27
 
 This is the **source of truth** for the game rules of this project. It consolidates every decision in `PORTING_STATUS.md` → Decisions (D1–D9, Q1–Q8, #12–#18, R1–R7, S1–S7, I1–I8).
-Rule IDs **T1–T18** are stable; code, tests and docs should cite them.
+Rule IDs **T1–T25** are stable (T19–T25: coins, §17); code, tests and docs should cite them.
 
 It deliberately differs from the original implementation and from the original wiki. See `RESEARCH.md` §20 for the comparison and `PORTING_STATUS.md` for why each point differs.
 
@@ -233,7 +233,21 @@ When at least one player qualifies:
 
 ---
 
-## 17. Rule ↔ decision map
+## 17. Coins (C1–C10, E1–E9)
+
+Coins are virtual and only exist inside the game (C1). **All amounts are computed and applied by the server** (C10). Stake **S** belongs to the room (C3); with **S = 0** nothing below moves any coin.
+
+| # | Rule |
+|---|---|
+| T19 | **Balances:** 1,000 on registration; daily bonus 100 (once per Vietnam day); relief 500 when the balance is below 100 (once per Vietnam day). No transfers, deposits or withdrawals. A balance is never negative. |
+| T20 | **Eligibility:** only connected players with at least **10×S** are dealt in (C9, E7). |
+| T21 | **Place payments** at game over (C4, E1): 4 players: Bét → Nhất S, Ba → Nhì ⌊S/2⌋. 3 players: Bét → Nhất S. 2 players: Bét → Nhất S. |
+| T22 | **Instant win** (C5, E2): every non-winner pays 2×S to every instant winner. Nothing else is paid in that game. |
+| T23 | **Chặt heo / chặt chồng** (C6, C7, E3): 2♠/2♣ = 1×S, 2♦/2♥ = 2×S, a pair = the sum (V). When the round's chop chain ends, the owner of the last chopped combination pays V × (number of chops in the chain) to the last chopper. |
+| T24 | **Thối heo** (C8, E4): at game over, the last player still holding cards pays 1×S per black 2 and 2×S per red 2 in their hand to the player ranked just above them. |
+| T25 | **Not enough coins** (C9, E5): a debtor pays at most their balance; several creditors share proportionally; the total is always 0. |
+
+## 18. Rule ↔ decision map
 
 | Rule | Decisions |
 |---|---|
@@ -255,3 +269,4 @@ When at least one player qualifies:
 | T16 | S1 |
 | T17 | D1, R3 |
 | T18 | I1–I8 |
+| T19–T25 | C1–C10, E1–E9 |

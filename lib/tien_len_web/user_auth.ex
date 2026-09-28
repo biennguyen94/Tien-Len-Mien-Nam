@@ -55,7 +55,7 @@ defmodule TienLenWeb.UserAuth do
 
   def on_mount(:mount_current_user, _params, session, socket) do
     allow_ecto_sandbox(socket)
-    {:cont, mount_current_user(socket, session)}
+    {:cont, socket |> mount_current_user(session) |> track_coins()}
   end
 
   def on_mount(:require_user, _params, session, socket) do
@@ -73,7 +73,8 @@ defmodule TienLenWeb.UserAuth do
         {:cont,
          socket
          |> Phoenix.Component.assign(:player_id, user.id)
-         |> Phoenix.Component.assign(:player_name, user.display_name)}
+         |> Phoenix.Component.assign(:player_name, user.display_name)
+         |> track_coins()}
     end
   end
 
@@ -82,6 +83,26 @@ defmodule TienLenWeb.UserAuth do
       Accounts.get_user(session["user_id"])
     end)
   end
+
+  # Keeps `@current_user.coins` (shown in the header) up to date on every page.
+  defp track_coins(%{assigns: %{current_user: %{id: id}}} = socket) do
+    if Phoenix.LiveView.connected?(socket) do
+      TienLen.Economy.subscribe(id)
+
+      Phoenix.LiveView.attach_hook(socket, :coins, :handle_info, fn
+        {:coins_updated, ^id, balance}, socket ->
+          user = %{socket.assigns.current_user | coins: balance}
+          {:cont, Phoenix.Component.assign(socket, :current_user, user)}
+
+        _other, socket ->
+          {:cont, socket}
+      end)
+    else
+      socket
+    end
+  end
+
+  defp track_coins(socket), do: socket
 
   # Tests only: LiveView processes join the database sandbox of the test that mounted them.
   defp allow_ecto_sandbox(socket) do

@@ -18,6 +18,10 @@ Last updated: 2026-09-27
 | 12 | Accounts: register / login / logout | **DONE** (2026-09-28) |
 | 13 | Game results, leaderboard, history | **DONE** (2026-09-28) |
 | 14 | Deploy with database | **DONE** (2026-09-28): `tien-len` + `tien-len-db` on port 4020 |
+| 15 | Coins: ledger and balances | **DONE** (2026-09-28) |
+| 16 | Coins: settlement of games (places, instant win, chặt heo, thối heo) | **DONE** (2026-09-28) |
+| 17 | Coins: UI | **DONE** (2026-09-28) |
+| 18 | Coins: deploy | **DONE** (2026-09-28) |
 
 Phoenix app generated at the repo root (O1, O2). Domain so far: `TienLen.Card`, `TienLen.Deck` (Phase 2), `TienLen.Combination` (Phase 3), `TienLen.Rules` and `TienLen.InstantWin` (Phase 4), `TienLen.Game` (Phase 5), `TienLen.Room` and `TienLen.RoomServer` (Phase 6), `TienLen.Lobby` + `TienLenWeb.PlayerIdentity` (Phase 7), LiveView UI: `LobbyLive` (`/`) and `TableLive` (`/phong/:id`) (Phase 8). The web layer is still the generator's default page.
 
@@ -133,6 +137,35 @@ Interpretations taken to implement A1–A4 (confirm or override):
 | Y7 | No login rate limiting in the first version (residual risk: password guessing; see RISKS). |
 | Y8 | The leaderboard and history pages also require login (consistent with A3). (Phase 13) |
 | Z1 | The deployed app runs its migrations at **every start** (`bin/migrate && bin/server`). Safe because the database belongs to Tiến Lên alone; open-mu-web does not do this because its database is OpenMU's. PostgreSQL is pinned to major version 18 (`postgres:18`), because a major upgrade needs a data migration. (Phase 14) |
+
+### Batch 7 — coins (owner, 2026-09-28)
+
+| # | Decision |
+|---|---|
+| C1 | **Virtual coins only.** No real-money deposit or withdrawal, **no transfers between players**. |
+| C2 | New account: **1,000** coins. Daily bonus: **100**. Relief ("cứu trợ"): **500**. |
+| C3 | Each room has a **stake S**: `0` (for fun, no coins move at all) or any integer **≥ 10**, with no fixed maximum. |
+| C4 | **Place payments** (pairs of places): 4 players: Nhất +S from Bét, Nhì +S/2 from Ba. 3 players: Nhất +S from Bét, Nhì 0. 2 players: Nhất +S from Bét. The total is always 0. |
+| C5 | **Instant win (tới trắng):** each instant winner receives **2×S from every other player**. |
+| C6 | **Chặt heo:** a black 2 (♠ ♣) is worth **1×S**, a red 2 (♦ ♥) **2×S**; a pair of 2s is the sum. The owner of the chopped 2s pays the chopper. |
+| C7 | **Chặt chồng:** the **last chopped player pays the whole chain** to the last chopper. |
+| C8 | **Thối heo:** at the end of a game, the **Bét** player pays for each 2 still in hand (black 1×S, red 2×S) to the **player ranked just above** them. |
+| C9 | **Not enough coins:** a player is dealt in only with a balance of **at least 10×S**. If a debt is still larger than the balance, they pay **all they have** (never negative); several creditors share it proportionally. The total stays 0. |
+| C10 | **Server-side and transaction-safe.** The game/room decides the results; an economy layer applies them. The client never sends amounts. |
+
+Interpretations taken to implement C1–C10 — **approved by the owner (2026-09-28)**:
+
+| # | Interpretation |
+|---|---|
+| E1 | Nhì's amount in a 4-player game is **⌊S/2⌋** (S = 15 → 7). |
+| E2 | Several instant winners: **each** receives 2×S from **each** non-winner. An instant-win game has no place payments, no chops and no thối. |
+| E3 | **Chop chain** of a round: it starts when a single 2 or a pair of 2s is chopped. Its value **V** = the 2s' value (C6). Every later play on the chop-context centre (a higher same-type chop, a cross-type chop, or an out-of-turn four-pair) is another chop in the chain. When the chain ends (the round ends, or the game ends), **the owner of the last chopped combination pays V × (number of chops) to the last chopper**; nobody else in the chain pays. Example with S = 100, 2♥ (V = 200): B chops A's 2♥ → A would pay 200; C then chops B's three-pair → B pays C 400, and A pays nothing. A 2 beaten by a higher 2 is not a chop. |
+| E4 | **Thối heo** is paid by the last player still **holding cards** at the end, to the player ranked just above. Removed players never pay thối (their cards were discarded). No thối in instant-win games. |
+| E5 | **Proportional sharing** when a debtor cannot pay everything (C9): each creditor gets ⌊owed × paid / total owed⌋; the few coins left over by rounding go to the creditors in ranking order. |
+| E6 | **Settlement timing:** a chop chain is settled when its round ends; place payments, thối and instant-win payments at game over. All are in one database transaction each, recorded once per game (idempotent). |
+| E7 | **Eligibility:** a new game is dealt to the connected seated players with a balance ≥ 10×S (C9, together with X6). If fewer than 2 are eligible, the start is refused. The host sets S when opening the room and may change it **between games only**. |
+| E8 | **Daily bonus** is claimed with a button, once per Vietnam calendar day (UTC+7). **Relief** is claimed with a button when the balance is **below 100**, at most once per Vietnam day. |
+| E9 | Existing accounts receive the 1,000 starting coins when the coin feature is deployed. |
 
 ### Project decisions
 
@@ -748,6 +781,90 @@ Interpretations taken to implement A1–A4 (confirm or override):
 ### NOT VERIFIED
 
 - Registration and a full game in a real browser against the container.
+
+## Phases 15–18 results — coins (2026-09-28)
+
+### Delivered
+
+- **Phase 15 — ledger and balances:**
+  - Migration `add_coins`:
+    - `users.coins` (bigint, `CHECK coins >= 0`), `daily_bonus_on`, `relief_on`;
+    - `coin_transactions` (append-only ledger: amount, balance after, reason, counterparty, ref);
+    - `coin_settlements` (unique keys = idempotency);
+    - existing accounts get 1,000 (E9).
+  - `TienLen.Economy`, the only module that changes balances:
+    - `claim_daily_bonus/2`, `claim_relief/2` (E8, Vietnam day);
+    - `settle/3`: row locks in id order, each debtor capped at the starting balance, proportional sharing with in-order leftovers (E5), credits never fund debits, idempotent by key;
+    - `balance(s)/1`, `claimable/2`, `history/2`, `richest/1`;
+    - per-user and global PubSub updates.
+  - Registration grants 1,000 coins in the same transaction as the account (`Ecto.Multi`).
+  - `.formatter.exs` now imports the Ecto formatter rules; schema macros are written without parentheses.
+- **Phase 16 — settlement of games:**
+  - `Game` tracks the round's **chop chain** (E3) and emits `{:chop_chain, %{payer, payee, units, chops}}` when the round or the game ends. `Game.twos_units/1` (black 1, red 2).
+  - Pure `TienLen.Payout`: `game_over/2` (places T21 or instant win T22, plus thối T24), `places/2`, `instant_win/2`, `thoi/2`, `chop_chain/2`. Debts are between seats; stake 0 gives nothing; chopping your own combination gives nothing.
+  - `Room`: `stake` (0 or 10…10¹²), `set_stake/3` (host, between games), eligibility 10×S (`:not_enough_coins`), `game_no` for settlement keys.
+  - `RoomServer`:
+    - options `:stake` and `:economy` (`TienLen.Economy` by default, off in tests);
+    - settles chains and game-over debts through `Economy.settle/3` with keys `room:<id>:game:<n>:chain:<k>` / `:end`;
+    - appends `{:coins, transfers}` (seats) to the broadcast events;
+    - the view carries `stake`, `min_balance`, `balances` (by seat) and `coin_deltas` (this game);
+    - settlement failures are logged and never stop play.
+- **Phase 17 — UI:**
+  - header balance (live on every page through a `UserAuth` hook);
+  - lobby coin panel with "Nhận thưởng ngày (+100)" / "Nhận cứu trợ (+500)";
+  - stake field when creating a room; stake in the room list;
+  - at the table: stake badge, balance and +/− per seat, the host's "Đổi cược" form between games, the "not enough coins" hint, and a coins section in the results;
+  - `/lich-su-coin` ledger page;
+  - "Giàu nhất" tab on `/bang-xep-hang`;
+  - Vietnamese labels and `1.000` number formatting.
+  - Clients never send amounts: the only number a client sends is the host's proposed stake, which the server validates.
+- **Phase 18 — deploy:** image rebuilt and redeployed twice (the second time with the fix below). The `add_coins` migration ran on the production database at start.
+
+### VERIFIED
+
+- `mix precommit`: **304 passed (2 doctests, 302 tests)**, no warnings.
+- **Economy tests:**
+  - the registration grant and its rollback on a failed registration;
+  - the daily bonus once per Vietnam day, and **10 concurrent claims pay once**;
+  - relief only below 100, once per day; the 17:00 UTC day boundary;
+  - `settle` moves coins and writes both ledger lines;
+  - idempotency;
+  - the balance cap;
+  - proportional sharing (100 over three creditors of 200 → 34/33/33);
+  - credits cannot fund debits;
+  - junk debts are ignored;
+  - **300 random settlements keep the total and never go negative, and every ledger sum equals the balance**;
+  - the database refuses a negative balance directly.
+- **Payout and chain tests:**
+  - the E3 example (2♥ chopped, then chopped again → B pays C 4 units);
+  - black and red values; a higher 2 is not a chop;
+  - an out-of-turn four-pair in a chain;
+  - a chain closed at game over;
+  - the owner's place examples with stake 500; E1 rounding; zero sums;
+  - an instant win with two winners;
+  - thối to the player just above; removed players pay no thối;
+  - stake 0; chopping your own combination.
+- **Rooms with the real Economy** (stake 100, 3 players): chain + place + thối give **1,100 / 400 / 1,500 (total 3,000)**, with ledger reasons and view deltas `%{0 => 100, 1 => -600, 2 => 500}`. Also: the `{:coins, …}` event at round end, stake 0, eligibility, a refused start, stake-change rules, invalid stakes.
+- **LiveView:**
+  - header and lobby balance; daily bonus once (a replayed event with a forged amount changes nothing); relief;
+  - stake validation when creating a room; the room list stake;
+  - table stake, seat balances and ± for both players; the header updates live;
+  - the host-only stake change; the not-eligible hint; the refused start;
+  - the coin history page; the "Giàu nhất" tab; login required.
+- **Production** (`bin/tien_len rpc` + HTTP):
+  - registrations got 1,000;
+  - the same 3-player stake-100 game gave 1,100 / 400 / 1,500 with deltas 100 / −600 / 500 and Bình's ledger `thoi −100, place −100, chop −400`;
+  - logged in over HTTP, the header shows 🪙 1.500, the lobby shows the balance, the daily-bonus button and the stake field;
+  - `/lich-su-coin` lists "Thối heo (từ Binh) +100", "Chặt heo (từ Binh) +400", "Tặng khi đăng ký +1.000";
+  - "Giàu nhất" lists 1.500 / 1.100 / 400.
+  - The three test accounts and their game were deleted afterwards.
+  - One real account (`bien`, registered after the deploy, 1,000 coins) was left untouched.
+
+### Found and fixed on the way
+
+- **Real bug:** `RoomServer.call/2` only caught `:noproc` and `:normal` exits. A room dying for any other reason (killed, crashed, timed out) during a call **crashed the caller**. For example, the lobby LiveView listing all rooms. It was found by a flaky lobby test (1 in ~20 full runs). Fixed: any exit of the room process becomes `{:error, :room_not_found}`. A regression test was added and confirmed to fail on the old code.
+- **Flaky test:** the Phase 9 timeout test used a 40 ms turn timer and could miss the countdown under load. It now uses 500 ms and a longer wait.
+- **Flakiness status (accepted by the owner, 2026-09-28):** after both fixes, a background loop of repeated full-suite runs found no further failure before it was stopped at the owner's request. The run count was not recorded exactly: several dozen runs, on top of the earlier 40 clean runs. No known flaky test remains. Any new intermittent failure should be captured with the same loop: repeat `mix test`, log the seed and the first failure.
 
 ## Environment state
 

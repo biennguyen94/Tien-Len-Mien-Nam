@@ -35,7 +35,7 @@ defmodule TienLen.RoomServer do
   # events after which the (possibly same) current player gets a fresh turn timer
   @turn_events [:played, :chopped, :passed, :timed_out, :round_ended, :lead_moved, :game_started]
   # events that change the lobby summary (player count, status, host)
-  @lobby_events [:joined, :left, :host_changed, :game_started, :game_over]
+  @lobby_events [:joined, :left, :host_changed, :game_started, :game_over, :stake_changed]
 
   # -- API ----------------------------------------------------------------------
 
@@ -55,6 +55,12 @@ defmodule TienLen.RoomServer do
   def max_rooms, do: Application.get_env(:tien_len, :max_rooms, 500)
 
   defp do_start_room(opts) do
+    if Room.valid_stake?(Keyword.get(opts, :stake, 0)),
+      do: start_child(opts),
+      else: {:error, :invalid_stake}
+  end
+
+  defp start_child(opts) do
     id = Keyword.get_lazy(opts, :id, &new_id/0)
 
     case DynamicSupervisor.start_child(
@@ -98,6 +104,9 @@ defmodule TienLen.RoomServer do
   def pass(room_id, player_id), do: call(room_id, {:command, player_id, :pass})
   def chop(room_id, player_id, cards), do: call(room_id, {:command, player_id, {:chop, cards}})
 
+  @doc "The host changes the room's stake between games (E7)."
+  def set_stake(room_id, player_id, stake), do: call(room_id, {:set_stake, player_id, stake})
+
   @doc "Dry run of a command (`{:play, cards}`, `:pass`, `{:chop, cards}`) for UI labels."
   def check(room_id, player_id, cmd), do: call(room_id, {:check, player_id, cmd})
 
@@ -110,11 +119,13 @@ defmodule TienLen.RoomServer do
   @doc "Public summary for the lobby list (no player ids, no cards)."
   def summary(room_id), do: call(room_id, :summary)
 
+  # Any exit of the room process during a call (gone, stopped, crashed, killed, timed out)
+  # becomes {:error, :room_not_found}: a dying room must never take down the caller (e.g. the
+  # lobby listing every room, found by a flaky test).
   defp call(room_id, msg) do
     GenServer.call(via(room_id), msg)
   catch
-    :exit, {:noproc, _} -> {:error, :room_not_found}
-    :exit, {:normal, _} -> {:error, :room_not_found}
+    :exit, _reason -> {:error, :room_not_found}
   end
 
   defp via(room_id), do: {:via, Registry, {TienLen.RoomRegistry, room_id}}
@@ -130,7 +141,7 @@ defmodule TienLen.RoomServer do
     {:ok,
      %{
        id: id,
-       room: Room.new(id),
+       room: Room.new(id, Keyword.get(opts, :stake, 0)),
        version: 0,
        turn_timeout: Keyword.get(opts, :turn_timeout, @turn_timeout),
        disconnect_timeout: Keyword.get(opts, :disconnect_timeout, @disconnect_timeout),
@@ -140,6 +151,14 @@ defmodule TienLen.RoomServer do
          Keyword.get_lazy(opts, :recorder, fn ->
            Application.get_env(:tien_len, :results_recorder, TienLen.Stats)
          end),
+       # module with balances/1 and settle/3 (TienLen.Economy in dev/prod, off in tests)
+       economy:
+         Keyword.get_lazy(opts, :economy, fn ->
+           Application.get_env(:tien_len, :economy, TienLen.Economy)
+         end),
+       # coins moved in the current / last game: seat => net amount, and chains settled
+       coin_deltas: %{},
+       chain_no: 0,
        # %{ref, seat, deadline} of the running turn timer
        turn: nil,
        # player_id => timer ref
@@ -180,10 +199,20 @@ defmodule TienLen.RoomServer do
         [] -> {Deck.new_seed(), []}
       end
 
-    case Room.start_game(state.room, player_id, deal) do
-      {:ok, room, events} -> {:reply, :ok, changed(%{state | deals: deals}, room, events)}
-      error -> {:reply, error, state}
+    balances = state.economy && player_balances(state)
+
+    case Room.start_game(state.room, player_id, deal, balances) do
+      {:ok, room, events} ->
+        state = %{state | deals: deals, coin_deltas: %{}, chain_no: 0}
+        {:reply, :ok, changed(state, room, events)}
+
+      error ->
+        {:reply, error, state}
     end
+  end
+
+  def handle_call({:set_stake, player_id, stake}, _from, state) do
+    reply_change(state, Room.set_stake(state.room, player_id, stake))
   end
 
   def handle_call({:command, player_id, cmd}, _from, state) do
@@ -198,8 +227,14 @@ defmodule TienLen.RoomServer do
     if Room.seat_of(state.room, player_id) == nil do
       {:reply, {:error, :not_in_room}, state}
     else
-      {:reply, Map.put(Room.view(state.room, player_id), :turn_ms_left, turn_ms_left(state)),
-       state}
+      view =
+        state.room
+        |> Room.view(player_id)
+        |> Map.put(:turn_ms_left, turn_ms_left(state))
+        |> Map.put(:coin_deltas, state.coin_deltas)
+        |> Map.put(:balances, seat_balances(state))
+
+      {:reply, view, state}
     end
   end
 
@@ -213,7 +248,8 @@ defmodule TienLen.RoomServer do
       max_players: 4,
       status: room.status,
       host_name: host && host.name,
-      joinable: room.status == :waiting and map_size(room.seats) < 4
+      joinable: room.status == :waiting and map_size(room.seats) < 4,
+      stake: room.stake
     }
 
     {:reply, summary, state}
@@ -303,6 +339,7 @@ defmodule TienLen.RoomServer do
   defp changed(state, room, events) do
     state = %{state | room: room, version: state.version + 1} |> reschedule_turn(events)
     if Enum.any?(events, &(elem(&1, 0) == :game_over)), do: record_result(state)
+    {state, events} = settle_coins(state, events)
 
     Phoenix.PubSub.broadcast(
       TienLen.PubSub,
@@ -315,6 +352,91 @@ defmodule TienLen.RoomServer do
     end
 
     state
+  end
+
+  # -- coins (T20–T25, E6) ----------------------------------------------------------
+
+  # Chop chains are settled when they end (round end or game over); places, thối and
+  # instant-win payments at game over. Each settlement has a unique key, so a retry never
+  # pays twice. The actual transfers are appended as a {:coins, transfers} event (seats).
+  defp settle_coins(%{economy: nil} = state, events), do: {state, events}
+  defp settle_coins(%{room: %{stake: 0}} = state, events), do: {state, events}
+
+  defp settle_coins(state, events) do
+    room = state.room
+
+    {state, transfers} =
+      Enum.reduce(events, {state, []}, fn
+        {:chop_chain, chain}, {st, acc} ->
+          no = st.chain_no + 1
+          key = "room:#{st.id}:game:#{room.game_no}:chain:#{no}"
+
+          {%{st | chain_no: no},
+           acc ++ settle(st, key, TienLen.Payout.chop_chain(chain, room.stake))}
+
+        {:game_over, _ranking}, {st, acc} ->
+          key = "room:#{st.id}:game:#{room.game_no}:end"
+          {st, acc ++ settle(st, key, TienLen.Payout.game_over(room.game, room.stake))}
+
+        _event, acc ->
+          acc
+      end)
+
+    if transfers == [] do
+      {state, events}
+    else
+      deltas =
+        Enum.reduce(transfers, state.coin_deltas, fn t, acc ->
+          acc
+          |> Map.update(t.from, -t.amount, &(&1 - t.amount))
+          |> Map.update(t.to, t.amount, &(&1 + t.amount))
+        end)
+
+      {%{state | coin_deltas: deltas}, events ++ [{:coins, transfers}]}
+    end
+  end
+
+  # seat debts → account debts → Economy.settle → paid transfers back in seats
+  defp settle(state, key, seat_debts) do
+    players = state.room.game_players
+    seat_of = Map.new(players, fn {seat, pid} -> {pid, seat} end)
+
+    debts =
+      for d <- seat_debts, from = players[d.from], to = players[d.to] do
+        %{d | from: from, to: to}
+      end
+
+    case debts != [] && state.economy.settle(key, debts, key) do
+      {:ok, paid} when is_list(paid) ->
+        Enum.map(paid, fn t -> %{t | from: seat_of[t.from], to: seat_of[t.to]} end)
+
+      {:ok, :already_applied} ->
+        []
+
+      false ->
+        []
+
+      other ->
+        Logger.error("room #{state.id}: coin settlement #{key} failed: #{inspect(other)}")
+        []
+    end
+  rescue
+    error ->
+      Logger.error("room #{state.id}: coin settlement #{key} failed: #{Exception.message(error)}")
+      []
+  end
+
+  defp player_balances(state) do
+    state.room.seats |> Map.values() |> Enum.map(& &1.player_id) |> state.economy.balances()
+  rescue
+    _ -> %{}
+  end
+
+  defp seat_balances(%{economy: nil}), do: %{}
+
+  defp seat_balances(state) do
+    balances = player_balances(state)
+    Map.new(state.room.seats, fn {seat, p} -> {seat, Map.get(balances, p.player_id)} end)
   end
 
   # Y6: a failing write is logged and never interrupts play.

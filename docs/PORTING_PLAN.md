@@ -130,3 +130,25 @@ Tien-Len-Mien-Nam/
 - [ ] Manual check in a real browser (NOT VERIFIED yet).
 - Acceptance: the container stack runs, registration/login/leaderboard work over HTTP, data survives a restart.
 
+## Phase 15 — Coins: ledger and balances (C1, C2, C10, E8, E9) — DONE (2026-09-28)
+
+- [x] `users.coins` (CHECK ≥ 0) and an append-only `coin_transactions` ledger (user, amount, reason, reference, unique idempotency key).
+- [x] `TienLen.Economy`: starting coins at registration, daily bonus, relief, and `apply/1` for a list of transfers in one transaction (row locks, caps at the balance, proportional sharing E5), idempotent by key.
+- Tests: balances never negative, ledger sums equal balances, concurrent claims pay once, idempotency, proportional sharing and rounding.
+
+## Phase 16 — Coins: settlement of games (C3–C9, E1–E7) — DONE (2026-09-28)
+
+- [x] Pure `TienLen.Payout`: from a finished game (ranking, instant winners, final hands) and the round's chop chains → transfers (T21–T24).
+- [x] `Game` records chop chains (start, every chop, owner, value) and emits them when a round or the game ends.
+- [x] Room stake (0 or ≥ 10, changeable between games), eligibility 10×S, `RoomServer` applies chain settlements at round end and the rest at game over through `Economy`.
+- Tests: every example in RULES T21–T24, chains of 1–4 chops, out-of-turn four-pair in a chain, removed players, instant win with several winners, insufficient balances, stake 0, idempotency across retries.
+
+## Phase 17 — Coins: UI — DONE (2026-09-28)
+
+- [x] Stake when opening a room (and between games); stake in the lobby list; balance in the header and at each seat; +/− coins in the results; daily bonus and relief buttons; coin history page; "Giàu nhất" leaderboard tab.
+- Tests: LiveView tests; no page or event lets a client set an amount.
+
+## Phase 18 — Coins: deploy — DONE (2026-09-28)
+
+- [x] Migrations on the containers (existing accounts get 1,000, E9); smoke test; DEPLOY.md.
+

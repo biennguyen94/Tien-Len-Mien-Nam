@@ -17,6 +17,9 @@ config :tien_len, TienLen.Repo,
 # (see TienLen.Stats and the :recorder room option).
 config :tien_len, :results_recorder, nil
 
+# Coins are not settled by room processes in tests unless a test asks (room option :economy).
+config :tien_len, :economy, nil
+
 config :tien_len, :sql_sandbox, Ecto.Adapters.SQL.Sandbox
 
 # We don't run a server during test. If one is required,

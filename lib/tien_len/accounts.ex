@@ -6,7 +6,15 @@ defmodule TienLen.Accounts do
 
   @doc "Registers a user. Returns `{:ok, user}` or `{:error, changeset}`."
   def register_user(attrs) do
-    %User{} |> User.registration_changeset(attrs) |> Repo.insert()
+    Ecto.Multi.new()
+    |> Ecto.Multi.insert(:user, User.registration_changeset(%User{}, attrs))
+    # the starting coins commit together with the account (T19)
+    |> TienLen.Economy.grant_starting_coins()
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{starting_coins: user}} -> {:ok, user}
+      {:error, :user, changeset, _} -> {:error, changeset}
+    end
   end
 
   @doc "Changeset for the registration form (no hashing needed for display)."

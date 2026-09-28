@@ -33,6 +33,7 @@ defmodule TienLenWeb.Router do
       live "/phong/:id", TableLive
       live "/bang-xep-hang", LeaderboardLive
       live "/lich-su", HistoryLive
+      live "/lich-su-coin", CoinHistoryLive
     end
   end
 

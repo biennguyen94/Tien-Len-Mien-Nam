@@ -77,7 +77,7 @@ defmodule TienLenWeb.LobbyLiveTest do
       {:ok, view, _} = live(login_conn("An"), ~p"/")
 
       {:error, {:live_redirect, %{to: "/phong/" <> id}}} =
-        view |> element("#create-room") |> render_click()
+        view |> form("#create-room-form", room: %{stake: "0"}) |> render_submit()
 
       on_exit(fn -> if pid = RoomServer.whereis(id), do: Process.exit(pid, :kill) end)
       assert RoomServer.whereis(id)

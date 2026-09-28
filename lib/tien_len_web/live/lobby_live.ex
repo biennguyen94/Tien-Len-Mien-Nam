@@ -10,7 +10,7 @@ defmodule TienLenWeb.LobbyLive do
 
   use TienLenWeb, :live_view
 
-  alias TienLen.{Accounts, Lobby}
+  alias TienLen.{Accounts, Economy, Lobby}
   alias TienLenWeb.Text
 
   @impl true
@@ -27,8 +27,27 @@ defmodule TienLenWeb.LobbyLive do
      |> assign(:trigger_submit, false)
      |> assign_register_form(Accounts.change_registration())
      |> assign(:login_form, to_form(%{"username" => login_username}, as: "user", id: "login"))
-     |> assign(:name_form, to_form(%{"display_name" => user && user.display_name}, as: "profile"))}
+     |> assign(:name_form, to_form(%{"display_name" => user && user.display_name}, as: "profile"))
+     |> assign(:room_form, to_form(%{"stake" => "0"}, as: "room"))
+     |> assign_claimable()}
   end
+
+  # What the player may claim today (E8); re-read after every claim and balance change.
+  defp assign_claimable(%{assigns: %{current_user: %{id: id}}} = socket),
+    do: assign(socket, :claimable, Economy.claimable(id))
+
+  defp assign_claimable(socket),
+    do: assign(socket, :claimable, %{daily_bonus: false, relief: false})
+
+  # Parses the stake typed by the host (C3). Anything else is refused by the room server.
+  defp parse_stake(%{"stake" => stake}) when is_binary(stake) do
+    case Integer.parse(String.trim(stake)) do
+      {n, ""} -> n
+      _ -> :invalid
+    end
+  end
+
+  defp parse_stake(_), do: 0
 
   defp assign_register_form(socket, changeset),
     do: assign(socket, :register_form, to_form(changeset, as: "user", id: "register"))
@@ -59,10 +78,31 @@ defmodule TienLenWeb.LobbyLive do
 
   # -- logged-in lobby ------------------------------------------------------------
 
-  def handle_event("create", _params, %{assigns: %{current_user: %{}}} = socket) do
-    case Lobby.open_room() do
+  def handle_event("create", params, %{assigns: %{current_user: %{}}} = socket) do
+    case Lobby.open_room(stake: parse_stake(params["room"] || %{})) do
       {:ok, id} -> {:noreply, push_navigate(socket, to: ~p"/phong/#{id}")}
       {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
+    end
+  end
+
+  def handle_event("claim_daily", _params, %{assigns: %{current_user: %{id: id}}} = socket) do
+    case Economy.claim_daily_bonus(id) do
+      {:ok, _balance} ->
+        {:noreply,
+         socket |> put_flash(:info, "Đã nhận thưởng ngày +100 coin") |> assign_claimable()}
+
+      {:error, reason} ->
+        {:noreply, socket |> put_flash(:error, Text.reason(reason)) |> assign_claimable()}
+    end
+  end
+
+  def handle_event("claim_relief", _params, %{assigns: %{current_user: %{id: id}}} = socket) do
+    case Economy.claim_relief(id) do
+      {:ok, _balance} ->
+        {:noreply, socket |> put_flash(:info, "Đã nhận cứu trợ +500 coin") |> assign_claimable()}
+
+      {:error, reason} ->
+        {:noreply, socket |> put_flash(:error, Text.reason(reason)) |> assign_claimable()}
     end
   end
 
@@ -97,7 +137,7 @@ defmodule TienLenWeb.LobbyLive do
   def handle_info({:room_closed, _id}, socket),
     do: {:noreply, assign(socket, :rooms, Lobby.list_rooms())}
 
-  def handle_info(_unexpected, socket), do: {:noreply, socket}
+  def handle_info(_unexpected, socket), do: {:noreply, assign_claimable(socket)}
 
   # -- render ---------------------------------------------------------------------
 
@@ -204,8 +244,42 @@ defmodule TienLenWeb.LobbyLive do
               đổi tên
             </button>
           </p>
-          <button id="create-room" phx-click="create" class="btn btn-primary">Tạo phòng</button>
         </div>
+
+        <div id="coins" class="card bg-base-200 p-4 flex flex-row flex-wrap items-center gap-3">
+          <span class="text-lg">🪙 <strong id="balance">{Text.coins(@current_user.coins)}</strong> coin</span>
+          <button
+            :if={@claimable.daily_bonus}
+            id="claim-daily"
+            phx-click="claim_daily"
+            class="btn btn-sm btn-success"
+          >
+            Nhận thưởng ngày (+100)
+          </button>
+          <button
+            :if={@claimable.relief}
+            id="claim-relief"
+            phx-click="claim_relief"
+            class="btn btn-sm btn-warning"
+          >
+            Nhận cứu trợ (+500)
+          </button>
+          <.link navigate={~p"/lich-su-coin"} class="link text-sm">Lịch sử coin</.link>
+        </div>
+
+        <.form for={@room_form} id="create-room-form" phx-submit="create" class="flex items-end gap-2">
+          <div class="w-44">
+            <.input
+              field={@room_form[:stake]}
+              type="number"
+              min="0"
+              step="1"
+              label="Tiền cược mỗi ván"
+            />
+          </div>
+          <button id="create-room" type="submit" class="btn btn-primary mb-2">Tạo phòng</button>
+          <span class="text-xs text-base-content/60 mb-3">0 = chơi vui, hoặc từ 10 trở lên</span>
+        </.form>
 
         <h2 class="text-lg font-semibold">Các phòng</h2>
         <p :if={@rooms == []} id="no-rooms" class="text-base-content/70">
@@ -217,6 +291,9 @@ defmodule TienLenWeb.LobbyLive do
             <span class="font-mono text-sm">{room.id}</span>
             <span class="flex-1 truncate">Chủ phòng: {room.host_name || "—"}</span>
             <span class="tabular-nums">{room.players}/{room.max_players}</span>
+            <span class="text-sm tabular-nums">
+              {if room.stake == 0, do: "Chơi vui", else: "Cược " <> Text.coins(room.stake)}
+            </span>
             <span class={[
               "badge",
               if(room.status == :playing, do: "badge-warning", else: "badge-success")

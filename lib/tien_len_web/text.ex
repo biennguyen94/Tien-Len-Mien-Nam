@@ -32,7 +32,12 @@ defmodule TienLenWeb.Text do
     no_game: "Chưa có ván nào",
     unknown_command: "Lệnh không hợp lệ",
     too_many_rooms: "Máy chủ đang quá nhiều phòng, hãy thử lại sau",
-    unknown_request: "Yêu cầu không hợp lệ"
+    unknown_request: "Yêu cầu không hợp lệ",
+    not_enough_coins: "Cần ít nhất 2 người có đủ 10× tiền cược",
+    invalid_stake: "Tiền cược phải là 0 hoặc từ 10 trở lên",
+    already_claimed: "Hôm nay bạn đã nhận rồi",
+    not_eligible: "Chỉ nhận được khi còn dưới 100 coin",
+    not_found: "Không tìm thấy"
   }
 
   @types %{
@@ -70,6 +75,43 @@ defmodule TienLenWeb.Text do
   def place(n, n), do: "Bét"
   def place(2, _n), do: "Nhì"
   def place(3, _n), do: "Ba"
+
+  @coin_reasons %{
+    "registration" => "Tặng khi đăng ký",
+    "starting_grant" => "Tặng ban đầu",
+    "daily_bonus" => "Thưởng ngày",
+    "relief" => "Cứu trợ",
+    "place" => "Tiền hạng",
+    "instant_win" => "Tới trắng",
+    "chop" => "Chặt heo",
+    "thoi" => "Thối heo"
+  }
+
+  @doc "Label of a ledger reason."
+  def coin_reason(reason), do: Map.get(@coin_reasons, reason, reason)
+
+  @doc "Coins with Vietnamese thousands separators: 1234567 → \"1.234.567\"."
+  def coins(nil), do: "—"
+
+  def coins(n) when is_integer(n) do
+    sign = if n < 0, do: "-", else: ""
+
+    digits =
+      n
+      |> abs()
+      |> Integer.to_string()
+      |> String.reverse()
+      |> String.graphemes()
+      |> Enum.chunk_every(3)
+      |> Enum.map_join(".", &Enum.join/1)
+      |> String.reverse()
+
+    sign <> digits
+  end
+
+  @doc "Signed coins: +500 / -250 / 0."
+  def signed_coins(n) when is_integer(n) and n > 0, do: "+" <> coins(n)
+  def signed_coins(n), do: coins(n)
 
   @doc "Card label, e.g. \"3♠\"."
   def card(%Card{} = card), do: Card.display(card)
