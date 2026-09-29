@@ -98,6 +98,7 @@ Người tới trắng về Nhất ngay và bài của họ được lật cho m
   - đang chặn thì **bỏ lượt**;
   - đang đi đầu thì **đánh lá nhỏ nhất** (hoặc lá bắt buộc ở nước đầu).
 - Mất kết nối thì bạn có **20 giây** để vào lại, ghế vẫn được giữ. Quá 20 giây thì bạn bị loại khỏi ván đang chơi, nhưng vẫn chơi được ván sau.
+- Bấm **"Rời phòng"** giữa ván cũng bị loại khỏi ván đó (không có máy đánh thay), và cả bàn sẽ thấy một chiếc dép 🩴 rơi xuống ghế trống của bạn.
 
 ---
 
@@ -129,6 +130,13 @@ Coin chỉ dùng trong game. **Không nạp, không rút, không chuyển cho ng
 - **Thối heo:** hết ván mà người Bét còn heo trên tay thì trả người xếp ngay trên mình 1 × S cho mỗi heo đen, 2 × S cho mỗi heo đỏ.
 - Nếu không đủ coin để trả, bạn chỉ trả tối đa số coin đang có. Số coin không bao giờ âm.
 - Xem mọi khoản ở **"Lịch sử coin"** (bấm vào số 🪙 trên thanh trên cùng).
+
+### 3.3 Tiêu coin
+
+Coin chỉ mất đi theo hai cách, cả hai đều **chỉ để vui, không giúp thắng ván nào**:
+
+- **Ném đồ** vào người khác ở bàn (mục 4.6): 1–5 coin mỗi lần, dòng "Ném đồ" trong Lịch sử coin.
+- **Cửa hàng** (mục 4.7): mua mặt sau lá bài và bàn chơi, dòng "Mua ở cửa hàng".
 
 ---
 
@@ -173,6 +181,38 @@ Coin chỉ dùng trong game. **Không nạp, không rút, không chuyển cho ng
 - **Chat sảnh:** mọi người ở sảnh đều thấy.
 - Tin nhắn dài tối đa 200 ký tự; gửi tối đa 5 tin trong 10 giây.
 - Tin nhắn **không được lưu**: khởi động lại máy chủ là mất.
+- **🎙️ Bình luận viên** tự bình luận các pha đáng chú ý trong chat phòng (chữ nghiêng), và câu mới nhất hiện ngay dưới bàn trong 5 giây:
+  - chặt heo, chặt chồng;
+  - báo 1 (ai đó còn 1 lá);
+  - về nhất, tới trắng;
+  - ngủ gật (hết giờ);
+  - thối heo, cóng;
+  - bỏ chạy, mất sóng.
+
+  Người xem cũng thấy dòng bình luận này (nhưng vẫn không thấy chat phòng).
+
+### 4.6 Ném đồ 🍅🥚🩴🌹
+
+- Bấm vào **ghế của người khác** (kể cả máy), chọn một món:
+
+  | Món | Giá |
+  |---|---|
+  | 🍅 Cà chua | 1 coin |
+  | 🥚 Trứng thối | 2 coin |
+  | 🩴 Dép | 3 coin |
+  | 🌹 Hoa hồng | 5 coin |
+
+- Món đồ bay qua bàn và để lại vết trên ghế người đó khoảng 3 giây. Cả bàn và người xem đều thấy.
+- Mỗi người **3 giây** mới ném được một lần. Không đủ coin thì không ném được.
+- Ném đồ không ảnh hưởng gì tới ván bài.
+
+### 4.7 Cửa hàng (`/cua-hang`)
+
+- Bấm **"Cửa hàng"** trên thanh trên cùng (điện thoại: trong menu ☰).
+- **Mặt sau lá bài** (9 kiểu, 400–1.500 coin): mọi người trong phòng và người xem đều thấy trên xấp bài của bạn.
+- **Bàn chơi** (9 kiểu, 500–1.500 coin): chỉ **bạn** thấy bàn của mình.
+- Mỗi món mua **một lần, dùng mãi**; mua xong là dùng luôn. Đổi qua lại giữa các món đã có thì **miễn phí** (nút "Dùng"). Kiểu cổ điển luôn có sẵn.
+- Không hoàn tiền, không tặng, không bán lại.
 
 ---
 

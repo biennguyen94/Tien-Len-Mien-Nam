@@ -1,6 +1,6 @@
 # Porting status
 
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 | Phase | Name | Status |
 |---|---|---|
@@ -44,6 +44,10 @@ Last updated: 2026-09-28
 | 38 | Replays; deploy | **DONE** (2026-09-28) |
 | 39 | Phone layout, part 2 (header menu, all pages) | **DONE** (2026-09-28) |
 | 40 | Cards in hand: selection and overlap | **DONE** (2026-09-28) |
+| 41 | Throwing items at the table | **DONE** (2026-09-29) |
+| 42 | Commentator | **DONE** (2026-09-29) |
+| 43 | Runaway line and slipper | **DONE** (2026-09-29) |
+| 44 | Shop: card backs and table themes | **DONE** (2026-09-29) |
 
 Current architecture (modules, processes, database, routes, visibility): `ARCHITECTURE.md` Part 2. What was delivered and verified in each phase: the results sections below.
 
@@ -305,6 +309,24 @@ The owner reported that the site was fine on a laptop but not on phones (360–4
 |---|---|
 | M3 | **No horizontal scroll at 360 / 390 / 412 px on any page**, laptop unchanged. Tailwind mobile-first classes with `sm:` (≥ 640 px) for the laptop layout, no custom CSS, no `overflow-x: hidden` on `body`. Details:<br>• the header on phones is the title, the coin badge and a **☰ menu** (all links, profile, logout, theme); the friend-request count is a dot on ☰;<br>• the lobby greeting and account links are one wrapping row;<br>• mission rewards never break; the progress bar goes under the title on phones;<br>• the create-room form is stacked on phones (input and button full width, note below);<br>• room rows wrap;<br>• the table shows the 3 opponents in one row above a full-width centre;<br>• wide tables scroll inside their own box (admin); the player-facing leaderboard fits by hiding "Số ván" on phones;<br>• the 💬 button sits in the screen corner with page bottom padding, and on the table it is icon-only and above the action bar. |
 | M4 | **Cards in hand** (owner's spec + owner's remark that a narrowed laptop window behaves like a phone):<br>• a selected card is shown only by a 12 px lift and a ring, never by stacking order or scaling;<br>• every card's corner stays visible and clickable;<br>• one row at **every** width, where the overlap is computed from the free space: at least 22 px shown per card, no overlap when there is room; no two rows;<br>• room above the hand for the lift. |
+
+### Batch 14 — fun extras: throwing, commentator, runaway, shop (2026-09-29)
+
+The owner picked #1 (ném đồ), #2 (bình luận viên), #6 (câu bỏ chạy) and #8 (mặt sau lá bài, bàn chơi theo chủ đề) and asked to implement them "ban thay sao hop ly nhat la duoc", without "Không cho ném tôi". The details below were **taken by Claude** and can be overridden.
+
+| # | Decision |
+|---|---|
+| TH1 | **Throwing items** at the table: a seated player clicks another occupied seat (bots included) and picks 🍅 cà chua (1 coin), 🥚 trứng thối (2), 🩴 dép (3) or 🌹 hoa hồng (5). The item flies from seat to seat (browser animation only) and leaves a mark on the target seat for 3 s. |
+| TH2 | The price is **spent** (removed from the game, ledger reason `throw`), through `TienLen.Economy.spend/5` in the room process, before the throw is broadcast. Not enough coins → refused. Prices are fixed in code, not admin settings. |
+| TH3 | **Cooldown 3 s per player**, enforced by the server. Nobody can turn throws off (owner). Spectators see throws but cannot throw. A throw never touches the game. |
+| TH4 | Spending during a staked game can leave less for that game's settlement: accepted, T25 already caps every debt at the balance. |
+| BL1 | **Commentator**: after a change, the room process turns public events into funny lines (random pick among several per kind) posted in the room chat as "🎙️ Bình luận viên" (no user id, never rate limited). Kinds: chặt heo / chặt chồng (who chopped whom), báo 1 (a player has 1 card left), về nhất, ngủ gật (turn timeout), tới trắng, thối heo (at game over, the last player still holds 2s: the number of 2s is told), cóng (the last player still holds all 13 cards), bỏ chạy / mất sóng (see RC1). |
+| BL2 | The lines use only public facts, plus the number of 2s of the thối heo loser **at game over** (the same fact the `thoi` coin transfer already reveals at a stake). `TienLen.Commentary` is pure; the randomness is injected. |
+| BL3 | The latest line is also shown for 5 s under the table (the chat box can be off screen on a phone), for players and spectators. Spectators get only this ticker, still no chat (V3). |
+| RC1 | **Runaway**: leaving the room during a game keeps the current rule (removed from the game, S5), **no bot takes over** (bots are only allowed at stake 0 and would play with the player's coins). The commentator says "🏃💨 X đã chạy mất dép 🩴, bị loại khỏi ván!" and a 🩴 drops onto the now empty seat for 4 s. A removal after the disconnect timeout gets a softer "📵 mất sóng" line and no slipper. |
+| SH1 | **Shop** `/cua-hang`: **card backs** (seen by everyone on your card pile at the table and by spectators) and **table themes** (the centre felt, seen only by you). 9 of each, one free default each, the rest 400–1,500 coins. Items are bought once and kept forever; equipping is free. |
+| SH2 | A purchase is one database transaction: the balance is locked and checked, the coins are spent (ledger reason `shop`, ref = item id) and the item is added (`user_items`, unique per user and item, so it is never paid twice). No refunds, no gifts, no selling. |
+| SH3 | Catalogue and prices are in code (`TienLen.Shop`); the looks are CSS only (no images). The equipped back and theme are stored on the user (`users.card_back`, `users.table_theme`); the back is taken into the room when joining or reconnecting. |
 
 ### Project decisions
 
@@ -1280,12 +1302,36 @@ On a narrowed laptop window the same happened below 640 px. Between 640 and ~900
 - The page audit is still 83/83 OK. `mix precommit`: 417 passed (new markup test: every slot is `relative`, the ring is on the image, no z-index or scale classes).
 - Screenshots at 360 / 640 / 1280 px reviewed. Redeployed; no errors in the log.
 
+## Phases 41–44 results — throwing, commentator, runaway, shop (2026-09-29)
+
+### Delivered
+
+- **Throws (41, TH1–TH4)**: `TienLen.Throws` (catalogue, 3 s cooldown), `RoomServer.throw/4` (seated, other occupied seat, known item, `RateLimit`, then `Economy.spend/5`, then `{:thrown, …}`), a menu on every other seat at the table, the `Throws` JS hook for the flight, the mark rendered by the server for 3 s; spectators see throws.
+- **Commentator (42, BL1–BL3)**: `TienLen.Commentary` (pure, 10 kinds, 2–4 templates each), posted from `RoomServer.changed/3` as chat lines with `system: true` (italic in the chat box); the latest line under the table for 5 s (`#commentary`), also for spectators.
+- **Runaway (43, RC1)**: the rule is unchanged (removed, no bot takes over). "Chạy mất dép" line; the table and spectator pages drop a 🩴 on the freed seat for 4 s. A disconnect timeout gets the "mất sóng" line.
+- **Shop (44, SH1–SH3)**: `TienLen.Shop` (9 card backs, 9 table themes), `Economy.spend/5` with an in-transaction step, migration `add_shop` (`users.card_back`, `users.table_theme`, `user_items`), `/cua-hang` with a header link, `card_back` carried into the room seat (`Room.join/5`, reconnect updates it) and drawn on card piles (`CardComponents.card_back/1`), the viewer's theme on `#centre`. Looks are CSS only (`assets/css/app.css`).
+- Ledger reasons `throw` ("Ném đồ") and `shop` ("Mua ở cửa hàng"); new error texts.
+
+### VERIFIED
+
+- `mix precommit`: **434 passed**; 17 new tests (`fun_extras_test.exs`, `fun_extras_live_test.exs`) repeated 5 times without failure. They cover:
+  - every commentator kind with fixed templates, including cóng + thối heo together, a runaway versus a disconnect timeout, and leaving between games (silent);
+  - throws: charged 5 coins for 🌹, broadcast, refused for own seat / empty seat / unknown item / stranger / cooldown / not enough coins (nothing charged);
+  - `spend/5`: insufficient, rollback when the in-transaction step fails;
+  - shop: buy once, no double payment, not affordable, equip only owned, back visible to the other player, theme only to its owner, and the page flow.
+- Headless Chromium (dev server):
+  - `audit.js`: **87/87 OK** (with `/cua-hang`) at 360/390/412/1280 px;
+  - the throw menu stays on screen for the left, top and right seats at 360 and 1280 px;
+  - a 🍅 costs 1 coin in the header, flies and leaves its mark;
+  - bought themes: Tết felt for its owner, default felt and the owner's card back for a spectator.
+- Emoji show as boxes in headless Chromium (no emoji font); layout checked, real-browser look NOT VERIFIED.
+
 ## Environment state
 
 - Original repo: `/home/bien_nguyen/tien-len` (unmodified source). It contains one untracked file, `docs/research.md`, added during research. That file is **stale**: it is superseded by this repo's `docs/`. The owner decided to keep it.
 - Scratch copy with `node_modules` and the probe tests: the session scratchpad (temporary, not needed).
 - Toolchain: `~/.local/beam` (OTP 28, Elixir 1.20.4, `phx_new` 1.8.15), shared with `open-mu-web`.
-- Git: local repo on branch `main`, no remote (the `gh` CLI is not installed). One commit per phase.
+- Git: branch `main`, remote `origin` = `https://github.com/biennguyen94/Tien-Len-Mien-Nam.git`. Commits only when the owner asks (usually one per batch).
 - Docker: compose project `tien-len` running: `tien-len` (image `tien-len:latest`, host port 4020) and `tien-len-db` (postgres:18, volume `tien-len_tien-len-db`; accounts `bien` (admin), `ai_ga`, `ben`), both `restart: unless-stopped`. Stop with `cd deploy && docker compose down` (never `-v` unless the data should be deleted).
 - Dev/test database: container `tien-len-dev-db` on 127.0.0.1:5434 (`docker compose -f deploy/docker-compose.dev.yml up -d`), databases `tien_len_dev` and `tien_len_test`.
 - First admin: `bien` (server command). Promote more on the web ("Cấp quyền admin") or with `docker exec tien-len bin/tien_len rpc 'TienLen.Admin.promote("username")'`.

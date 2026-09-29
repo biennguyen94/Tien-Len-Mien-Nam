@@ -80,9 +80,9 @@ defmodule TienLen.Lobby do
   or a game is running (R6), unless the player is already seated there.
   """
   @spec join_room(String.t(), term(), String.t()) :: {:ok, 0..3} | {:error, atom()}
-  def join_room(room_id, player_id, name, avatar \\ nil) do
+  def join_room(room_id, player_id, name, avatar \\ nil, card_back \\ nil) do
     with {:ok, name} <- normalize_name(name),
-         do: RoomServer.join(room_id, player_id, name, avatar)
+         do: RoomServer.join(room_id, player_id, name, avatar, card_back)
   end
 
   @doc "Leaves a room for good (frees the seat)."

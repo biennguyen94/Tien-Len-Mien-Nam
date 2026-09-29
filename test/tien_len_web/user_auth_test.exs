@@ -108,7 +108,13 @@ defmodule TienLenWeb.UserAuthTest do
       room = :sys.get_state(RoomServer.whereis(id)).room
 
       assert room.seats == %{
-               0 => %{player_id: user.id, name: "An", connected: true, avatar: nil}
+               0 => %{
+                 player_id: user.id,
+                 name: "An",
+                 connected: true,
+                 avatar: nil,
+                 card_back: "classic"
+               }
              }
     end
   end

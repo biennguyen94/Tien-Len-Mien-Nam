@@ -35,13 +35,43 @@ defmodule TienLenWeb.CardComponents do
   end
 
   attr :count, :integer, required: true
+  attr :back, :string, default: nil, doc: "the seat's card back (SH1), nil = classic"
 
   @doc "A small pile of card backs with a count."
   def card_backs(assigns) do
     ~H"""
     <div class="flex items-center gap-1">
-      <img src="/images/cards/1B.svg" alt="" class="w-6 rounded-sm shadow" draggable="false" />
+      <.card_back back={@back} class="w-6 rounded-sm shadow text-[0.65rem]" />
       <span class="text-sm font-semibold tabular-nums">{@count}</span>
+    </div>
+    """
+  end
+
+  attr :back, :string, default: nil
+  attr :class, :string, default: "w-6 rounded-sm shadow"
+  attr :rest, :global
+
+  @doc "One card back: the classic SVG, or a shop design (CSS `back-<id>`, SH1)."
+  def card_back(assigns) do
+    assigns =
+      assign(assigns, :item, TienLen.Shop.item(TienLen.Shop.valid(assigns.back, :card_back)))
+
+    ~H"""
+    <img
+      :if={@item.price == 0}
+      src="/images/cards/1B.svg"
+      alt=""
+      class={@class}
+      draggable="false"
+      {@rest}
+    />
+    <div
+      :if={@item.price > 0}
+      class={["card-back-custom", "back-" <> @item.id, @class]}
+      title={@item.name}
+      {@rest}
+    >
+      {@item.icon}
     </div>
     """
   end

@@ -2,7 +2,7 @@ defmodule TienLen.Economy do
   @moduledoc """
   Virtual coins (RULES T19–T25; decisions C1–C10, E5, E6, E8, E9).
 
-  The only module that changes balances. Everything runs in database transactions with row
+  The only module that changes balances (spending for throws and the shop included, T26). Everything runs in database transactions with row
   locks; every operation is recorded in the append-only ledger (`coin_transactions`) and is
   idempotent through a unique key in `coin_settlements`. Balances can never go negative (a
   `CHECK` constraint backs this up).
@@ -260,6 +260,46 @@ defmodule TienLen.Economy do
   end
 
   def adjust(_user_id, _amount, _reason, _admin_id), do: {:error, :invalid_amount}
+
+  @doc """
+  Spends `amount` coins of one user (T26: throwing items, the shop). The coins leave the game;
+  ledger line `-amount` with `reason` and `ref`. `also` runs inside the same transaction after
+  the balance check and may return `{:error, reason}` to cancel everything (the shop adds the
+  bought item there, so an item is never paid without being owned or the other way round).
+  `{:ok, balance}` or `{:error, :insufficient_coins | :not_found | reason}`.
+  """
+  def spend(user_id, amount, reason, ref \\ nil, also \\ fn -> :ok end)
+
+  def spend(user_id, amount, reason, ref, also) when is_integer(amount) and amount > 0 do
+    result =
+      Repo.transaction(fn ->
+        with {:ok, user} <- lock_user(user_id),
+             :ok <- if(user.coins >= amount, do: :ok, else: {:error, :insufficient_coins}),
+             :ok <- also.() do
+          balance = user.coins - amount
+          user |> Ecto.Changeset.change(coins: balance) |> Repo.update!()
+
+          Repo.insert!(%CoinTransaction{
+            user_id: user_id,
+            amount: -amount,
+            balance_after: balance,
+            reason: reason,
+            ref: ref
+          })
+
+          balance
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+
+    with {:ok, balance} <- result do
+      broadcast(user_id, balance)
+      {:ok, balance}
+    end
+  end
+
+  def spend(_user_id, _amount, _reason, _ref, _also), do: {:error, :invalid_amount}
 
   # -- settlements ----------------------------------------------------------------
 

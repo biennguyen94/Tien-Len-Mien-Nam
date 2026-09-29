@@ -32,6 +32,31 @@ const Hooks = {
     mounted() { this.el.scrollTop = this.el.scrollHeight },
     updated() { this.el.scrollTop = this.el.scrollHeight },
   },
+  // TH1: a thrown item flies from one seat to another (looks only; the server already
+  // checked and charged the throw and draws the mark on the target seat)
+  Throws: {
+    mounted() {
+      this.handleEvent("throw", ({from, to, emoji}) => {
+        const a = document.getElementById(from), b = document.getElementById(to)
+        if (!a || !b || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect()
+        const x0 = ra.left + ra.width / 2, y0 = ra.top + ra.height / 2
+        const dx = rb.left + rb.width / 2 - x0, dy = rb.top + rb.height / 2 - y0
+        const el = document.createElement("span")
+        el.textContent = emoji
+        el.setAttribute("aria-hidden", "true")
+        Object.assign(el.style, {position: "fixed", left: `${x0 - 16}px`, top: `${y0 - 16}px`,
+          fontSize: "2rem", lineHeight: "1", zIndex: 60, pointerEvents: "none"})
+        document.body.appendChild(el)
+        const arc = Math.min(-60, dy / 2 - 60)
+        el.animate([
+          {transform: "translate(0, 0) rotate(0deg) scale(0.8)"},
+          {transform: `translate(${dx / 2}px, ${arc}px) rotate(360deg) scale(1.3)`},
+          {transform: `translate(${dx}px, ${dy}px) rotate(720deg) scale(1)`},
+        ], {duration: 700, easing: "ease-in-out"}).onfinish = () => el.remove()
+      })
+    },
+  },
   // "Chép link" (G10): copies data-url to the clipboard
   CopyLink: {
     mounted() {

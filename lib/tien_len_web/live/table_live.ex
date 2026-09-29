@@ -5,8 +5,11 @@ defmodule TienLenWeb.TableLive do
   - Joins the room from this LiveView process (so the room server monitors it: closing the tab
     starts the disconnect timer, T15).
   - Renders only the player's own projection (`TienLen.RoomServer.view/2`): own hand, public
-    state, card counts. There are no spectators: anyone who cannot be seated is sent back to
-    the lobby (#17).
+    state, card counts. Anyone who cannot be seated is sent back to the lobby (spectators use
+    `TienLenWeb.SpectateLive`).
+  - Fun extras (batch 14): click another seat to throw an item (TH1, the flight is the
+    `Throws` hook), the commentator's latest line (BL3), a slipper on a runaway's seat (RC1),
+    the player's table theme and everyone's card backs (SH1).
   - Card selection lives only in this LiveView (never broadcast). Button labels come from
     server-side dry runs (`TienLen.RoomServer.check/3`), not from client code (D1).
   - Seats are drawn relative to the viewer: me at the bottom, the next seat (turn order) to
@@ -43,6 +46,14 @@ defmodule TienLenWeb.TableLive do
       # R1: seat => {emoji, shown until (ms)}
       |> assign(:reactions, %{})
       |> assign(:sort, :rank)
+      # TH1: the seat whose throw menu is open; seat => {item id, shown until, n}
+      |> assign(:throw_menu, nil)
+      |> assign(:marks, %{})
+      # RC1: empty seat => slipper shown until; BL3: {latest commentator line, until}
+      |> assign(:runaways, %{})
+      |> assign(:ticker, nil)
+      # SH1: my table theme
+      |> assign(:felt, TienLen.Shop.equipped(socket.assigns.current_user, :table))
 
     cond do
       not connected?(socket) ->
@@ -55,7 +66,8 @@ defmodule TienLenWeb.TableLive do
                id,
                socket.assigns.player_id,
                socket.assigns.player_name,
-               socket.assigns.current_user.avatar
+               socket.assigns.current_user.avatar,
+               TienLen.Shop.equipped(socket.assigns.current_user, :card_back)
              ) do
           {:ok, _seat} ->
             :timer.send_interval(1_000, :tick)
@@ -181,6 +193,32 @@ defmodule TienLenWeb.TableLive do
     {:noreply, socket}
   end
 
+  # TH1: open / close the throw menu on another occupied seat
+  def handle_event("throw_menu", %{"seat" => seat}, socket) do
+    seat =
+      case Integer.parse(to_string(seat)) do
+        {n, ""} -> if n == socket.assigns.throw_menu, do: nil, else: n
+        _ -> nil
+      end
+
+    {:noreply, assign(socket, :throw_menu, seat)}
+  end
+
+  def handle_event("throw", %{"item" => item}, socket) do
+    case socket.assigns.throw_menu do
+      nil ->
+        {:noreply, socket}
+
+      seat ->
+        socket = assign(socket, :throw_menu, nil)
+
+        case RoomServer.throw(socket.assigns.room_id, socket.assigns.player_id, seat, item) do
+          :ok -> {:noreply, socket}
+          {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
+        end
+    end
+  end
+
   # M2: hand order, by rank (default) or by suit
   def handle_event("sort", _params, socket),
     do:
@@ -221,13 +259,39 @@ defmodule TienLenWeb.TableLive do
      |> push_navigate(to: ~p"/")}
   end
 
-  def handle_info({:room_updated, _id, _version, _events}, socket), do: {:noreply, load(socket)}
+  def handle_info({:room_updated, _id, _version, events}, socket),
+    do: {:noreply, socket |> note_runaways(events) |> load()}
 
   def handle_info({:room_chat, _id, msg}, socket) do
     # only a seated player (who has a view) reads the room chat (G4)
-    if socket.assigns.view,
-      do: {:noreply, update(socket, :chat, &Enum.take(&1 ++ [msg], -50))},
-      else: {:noreply, socket}
+    if socket.assigns.view do
+      socket = update(socket, :chat, &Enum.take(&1 ++ [msg], -50))
+
+      {:noreply,
+       if(Map.get(msg, :system),
+         do: assign(socket, :ticker, {msg.text, now() + 5_000}),
+         else: socket
+       )}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # TH1: the flight is animated in the browser, the mark is drawn here
+  def handle_info({:thrown, _id, from, to, item_id}, socket) do
+    case TienLen.Throws.item(item_id) do
+      nil ->
+        {:noreply, socket}
+
+      item ->
+        {:noreply,
+         socket
+         |> push_event("throw", %{from: "seat-#{from}", to: "seat-#{to}", emoji: item.emoji})
+         |> update(
+           :marks,
+           &Map.put(&1, to, {item.id, now() + 3_700, System.unique_integer([:positive])})
+         )}
+    end
   end
 
   def handle_info({:room_chat_deleted, _id, msg_id}, socket),
@@ -242,10 +306,30 @@ defmodule TienLenWeb.TableLive do
     {:noreply,
      socket
      |> assign(:now, t)
-     |> update(:reactions, fn r -> Map.reject(r, fn {_seat, {_e, until}} -> until <= t end) end)}
+     |> update(:reactions, fn r -> Map.reject(r, fn {_seat, {_e, until}} -> until <= t end) end)
+     |> update(:marks, fn m -> Map.reject(m, fn {_seat, {_i, until, _n}} -> until <= t end) end)
+     |> update(:runaways, fn r -> Map.reject(r, fn {_seat, until} -> until <= t end) end)
+     |> update(:ticker, fn
+       {_text, until} when until <= t -> nil
+       ticker -> ticker
+     end)}
   end
 
   def handle_info(_unexpected, socket), do: {:noreply, socket}
+
+  # RC1: a player who left the room during a game (removed and left in one change)
+  defp note_runaways(socket, events) do
+    ran = for {:removed, seat} <- events, {:left, seat} in events, do: seat
+
+    if ran == [],
+      do: socket,
+      else:
+        update(
+          socket,
+          :runaways,
+          &Enum.reduce(ran, &1, fn s, acc -> Map.put(acc, s, now() + 4_000) end)
+        )
+  end
 
   defp load(socket) do
     case RoomServer.view(socket.assigns.room_id, socket.assigns.player_id) do
@@ -333,6 +417,13 @@ defmodule TienLenWeb.TableLive do
     end
   end
 
+  defp mark(item_id) do
+    case TienLen.Throws.item(item_id) do
+      nil -> ""
+      item -> item.emoji <> item.mark
+    end
+  end
+
   defp medal(1), do: "🥇"
   defp medal(2), do: "🥈"
   defp medal(3), do: "🥉"
@@ -409,29 +500,79 @@ defmodule TienLenWeb.TableLive do
            centre; from sm up the classic cross layout --%>
       <div
         id="table"
+        phx-hook="Throws"
         class="grid grid-cols-3 sm:grid-rows-[auto_1fr_auto] gap-2 sm:gap-3 items-center"
       >
         <div class="col-start-2 row-start-1 min-w-0 sm:justify-self-center">
-          <.seat view={@view} seat={seat_at(@view, 2)} secs={@secs} reactions={@reactions} />
+          <.seat
+            view={@view}
+            seat={seat_at(@view, 2)}
+            menu_align={:center}
+            secs={@secs}
+            reactions={@reactions}
+            marks={@marks}
+            runaways={@runaways}
+            throw_menu={@throw_menu}
+          />
         </div>
         <div class="col-start-1 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-start">
-          <.seat view={@view} seat={seat_at(@view, 3)} secs={@secs} reactions={@reactions} />
+          <.seat
+            view={@view}
+            seat={seat_at(@view, 3)}
+            menu_align={:left}
+            secs={@secs}
+            reactions={@reactions}
+            marks={@marks}
+            runaways={@runaways}
+            throw_menu={@throw_menu}
+          />
         </div>
         <div class="col-start-3 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-end">
-          <.seat view={@view} seat={seat_at(@view, 1)} secs={@secs} reactions={@reactions} />
+          <.seat
+            view={@view}
+            seat={seat_at(@view, 1)}
+            menu_align={:right}
+            secs={@secs}
+            reactions={@reactions}
+            marks={@marks}
+            runaways={@runaways}
+            throw_menu={@throw_menu}
+          />
         </div>
 
         <div
           id="centre"
-          class="col-span-3 row-start-2 sm:col-span-1 sm:col-start-2 min-h-32 sm:min-h-40 rounded-box bg-success/15 p-3 flex flex-col items-center justify-center gap-2"
+          data-felt={@felt}
+          class={[
+            "relative col-span-3 row-start-2 sm:col-span-1 sm:col-start-2 min-h-32 sm:min-h-40 rounded-box p-3 flex flex-col items-center justify-center gap-2",
+            "felt-" <> @felt,
+            @felt != TienLen.Shop.default(:table) && "felt-custom"
+          ]}
         >
           <.centre view={@view} />
         </div>
 
         <div class="col-span-3 row-start-3 justify-self-center">
-          <.seat view={@view} seat={@view.me} secs={@secs} reactions={@reactions} />
+          <.seat
+            view={@view}
+            seat={@view.me}
+            secs={@secs}
+            reactions={@reactions}
+            marks={@marks}
+            runaways={@runaways}
+            throw_menu={@throw_menu}
+          />
         </div>
       </div>
+
+      <p
+        :if={@ticker}
+        id="commentary"
+        class="ticker text-center text-sm font-semibold text-warning"
+        aria-live="polite"
+      >
+        {elem(@ticker, 0)}
+      </p>
 
       <.results :if={@view.status == :waiting and @view.game} view={@view} />
       <.waiting
@@ -540,23 +681,68 @@ defmodule TienLenWeb.TableLive do
   attr :seat, :integer, required: true
   attr :secs, :integer, default: nil
   attr :reactions, :map, default: %{}
+  attr :marks, :map, default: %{}
+  attr :runaways, :map, default: %{}
+  attr :throw_menu, :integer, default: nil
+  attr :menu_align, :atom, default: :center, doc: "keeps the throw menu inside the screen"
 
   defp seat(assigns) do
+    player = player(assigns.view, assigns.seat)
+
     assigns =
       assigns
-      |> assign(:player, player(assigns.view, assigns.seat))
+      |> assign(:player, player)
       |> assign(:game, assigns.view.game)
+      # TH1: any other occupied seat can be a target
+      |> assign(:target, player != nil and assigns.seat != assigns.view.me)
 
     ~H"""
     <div
       id={"seat-#{@seat}"}
+      phx-click={@target && "throw_menu"}
+      phx-value-seat={@target && @seat}
+      title={@target && "Bấm để ném đồ"}
       class={[
-        "rounded-box border px-2 py-1 sm:px-3 sm:py-2 w-full sm:w-auto sm:min-w-32 text-center text-sm sm:text-base",
+        "relative rounded-box border px-2 py-1 sm:px-3 sm:py-2 w-full sm:w-auto sm:min-w-32 text-center text-sm sm:text-base",
+        @target && "cursor-pointer",
         @game && @game.current == @seat && @view.status == :playing && "border-primary bg-primary/10",
         !(@game && @game.current == @seat && @view.status == :playing) && "border-base-300"
       ]}
     >
-      <p :if={@player == nil} class="text-base-content/50">Trống</p>
+      <p :if={@player == nil} class="text-base-content/50">
+        Trống
+        <span :if={@runaways[@seat]} id={"slipper-#{@seat}"} class="slipper-drop text-2xl">🩴</span>
+      </p>
+      <span
+        :if={@player && @marks[@seat]}
+        id={"mark-#{@seat}-#{elem(@marks[@seat], 2)}"}
+        class="throw-mark absolute inset-0 z-20 flex items-center justify-center text-3xl pointer-events-none"
+        aria-hidden="true"
+      >
+        {mark(elem(@marks[@seat], 0))}
+      </span>
+      <div
+        :if={@target and @throw_menu == @seat}
+        id={"throw-menu-#{@seat}"}
+        class={[
+          "absolute top-full z-40 mt-1 flex gap-1 rounded-box bg-base-100 p-1 shadow-lg border border-base-300",
+          @menu_align == :left && "left-0",
+          @menu_align == :right && "right-0",
+          @menu_align == :center && "left-1/2 -translate-x-1/2"
+        ]}
+      >
+        <button
+          :for={item <- TienLen.Throws.items()}
+          id={"throw-#{@seat}-#{item.id}"}
+          phx-click="throw"
+          phx-value-item={item.id}
+          class="btn btn-ghost btn-sm flex-col h-auto min-w-11 px-1 py-1 gap-0"
+          title={"#{item.name} (#{item.price} coin)"}
+        >
+          <span class="text-xl leading-none">{item.emoji}</span>
+          <span class="text-[0.65rem] tabular-nums">{item.price}🪙</span>
+        </button>
+      </div>
       <div :if={@player} class="relative">
         <span
           :if={@reactions[@seat]}
@@ -598,7 +784,7 @@ defmodule TienLenWeb.TableLive do
           :if={@game && @seat in @game.seats}
           class="flex items-center justify-center gap-2 text-sm"
         >
-          <.card_backs count={@game.card_counts[@seat]} />
+          <.card_backs count={@game.card_counts[@seat]} back={@player.card_back} />
           <span :if={@seat in @game.passed} class="badge badge-sm">Bỏ lượt</span>
           <span :if={@seat in @game.removed} class="badge badge-sm badge-ghost">Bị loại</span>
           <span :if={place_of(@view, @seat)} class="text-sm">

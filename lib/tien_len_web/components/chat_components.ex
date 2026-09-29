@@ -1,5 +1,8 @@
 defmodule TienLenWeb.ChatComponents do
-  @moduledoc "Chat box shared by the table (G4), the lobby (G5) and the admin watch view (G12)."
+  @moduledoc """
+  Chat box shared by the table (G4), the lobby (G5) and the admin watch view (G12). Lines of
+  the commentator (`system: true`, BL1) are shown in italics.
+  """
   use TienLenWeb, :html
 
   attr :id, :string, required: true
@@ -23,10 +26,14 @@ defmodule TienLenWeb.ChatComponents do
         <li :if={@messages == []} class="text-base-content/50">Chưa có tin nhắn.</li>
         <li :for={m <- @messages} id={"#{@id}-msg-#{m.id}"} class="flex gap-1 items-start">
           <span class="text-xs text-base-content/50 tabular-nums shrink-0">{hhmm(m.at)}</span>
-          <span class={["font-semibold shrink-0", m.user_id == @me && "text-primary"]}>
+          <span class={[
+            "font-semibold shrink-0",
+            m.user_id && m.user_id == @me && "text-primary",
+            Map.get(m, :system) && "text-warning"
+          ]}>
             {m.name}:
           </span>
-          <span class="flex-1">{m.text}</span>
+          <span class={["flex-1", Map.get(m, :system) && "italic"]}>{m.text}</span>
           <button
             :if={@delete_event}
             phx-click={@delete_event}

@@ -50,6 +50,7 @@ defmodule TienLenWeb.Router do
       live "/lich-su-coin", CoinHistoryLive
       live "/nguoi-choi/:username", ProfileLive
       live "/ban-be", FriendsLive
+      live "/cua-hang", ShopLive
     end
   end
 

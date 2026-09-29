@@ -254,3 +254,19 @@ Tien-Len-Mien-Nam/
 ## Phase 40 — Cards in hand: selection and overlap (M4) — DONE (2026-09-28)
 
 - [x] One adaptive row at every width; `relative` slots so a lifted card never covers its neighbour; ring on the image; `hand_audit.js` clean at 360–1280 px.
+
+## Phase 41 — Throwing items at the table (TH1–TH4) — DONE (2026-09-29)
+
+- [x] `TienLen.Throws`, `RoomServer.throw/4`, `Economy.spend/5`, seat menu, `Throws` hook, marks; spectators see throws.
+
+## Phase 42 — Commentator (BL1–BL3) — DONE (2026-09-29)
+
+- [x] `TienLen.Commentary`, system lines in the room chat, ticker for players and spectators.
+
+## Phase 43 — Runaway line and slipper (RC1) — DONE (2026-09-29)
+
+- [x] Runaway / lost-signal lines, 🩴 on the freed seat.
+
+## Phase 44 — Shop: card backs and table themes (SH1–SH3) — DONE (2026-09-29)
+
+- [x] `TienLen.Shop`, `user_items`, `/cua-hang`, card backs at the table, table themes; audit 87/87 OK.

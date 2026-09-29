@@ -2,7 +2,8 @@ defmodule TienLenWeb.SpectateLive do
   @moduledoc """
   Watching a room without a seat (decisions V1–V4). Spectators get the **public** view only:
   names, card counts, the centre, whose turn, results. No hand is ever sent (the view is built
-  with `Room.view(room, nil)`), and the room chat stays with the seated players (V3).
+  with `Room.view(room, nil)`), and the room chat stays with the seated players (V3); only the
+  commentator's latest line is shown (BL3). Throws and card backs are visible too (TH3, SH1).
   A player seated in the room is sent to the table instead.
   """
 
@@ -21,7 +22,11 @@ defmodule TienLenWeb.SpectateLive do
         page_title: "Xem phòng #{id}",
         view: nil,
         deadline: nil,
-        now: now()
+        now: now(),
+        # batch 14: throw marks, runaway slippers, the commentator's latest line
+        marks: %{},
+        runaways: %{},
+        ticker: nil
       )
 
     cond do
@@ -58,7 +63,16 @@ defmodule TienLenWeb.SpectateLive do
   def handle_info({:room_updated, _id, _v, [{:closed_by_admin}]}, socket),
     do: {:noreply, socket |> put_flash(:error, "Phòng đã bị đóng") |> push_navigate(to: ~p"/")}
 
-  def handle_info({:room_updated, _id, _v, _events}, socket) do
+  def handle_info({:room_updated, _id, _v, events}, socket) do
+    ran = for {:removed, seat} <- events, {:left, seat} in events, do: seat
+
+    socket =
+      update(
+        socket,
+        :runaways,
+        &Enum.reduce(ran, &1, fn s, acc -> Map.put(acc, s, now() + 4_000) end)
+      )
+
     case RoomServer.spectator_view(socket.assigns.room_id) do
       {:error, _} ->
         {:noreply, socket |> put_flash(:error, "Phòng đã đóng") |> push_navigate(to: ~p"/")}
@@ -68,8 +82,50 @@ defmodule TienLenWeb.SpectateLive do
     end
   end
 
-  def handle_info(:tick, socket), do: {:noreply, assign(socket, :now, now())}
-  # room chat, reactions and anything else are not for spectators
+  # TH1: spectators see throws (they cannot throw)
+  def handle_info({:thrown, _id, from, to, item_id}, socket) do
+    case TienLen.Throws.item(item_id) do
+      nil ->
+        {:noreply, socket}
+
+      item ->
+        {:noreply,
+         socket
+         |> push_event("throw", %{
+           from: "watch-seat-#{from}",
+           to: "watch-seat-#{to}",
+           emoji: item.emoji
+         })
+         |> update(
+           :marks,
+           &Map.put(
+             &1,
+             to,
+             {item.emoji <> item.mark, now() + 3_700, System.unique_integer([:positive])}
+           )
+         )}
+    end
+  end
+
+  # BL3: only the commentator's lines, as a ticker (the room chat stays with the players, V3)
+  def handle_info({:room_chat, _id, %{system: true, text: text}}, socket),
+    do: {:noreply, assign(socket, :ticker, {text, now() + 5_000})}
+
+  def handle_info(:tick, socket) do
+    t = now()
+
+    {:noreply,
+     socket
+     |> assign(:now, t)
+     |> update(:marks, fn m -> Map.reject(m, fn {_s, {_e, until, _n}} -> until <= t end) end)
+     |> update(:runaways, fn r -> Map.reject(r, fn {_s, until} -> until <= t end) end)
+     |> update(:ticker, fn
+       {_text, until} when until <= t -> nil
+       ticker -> ticker
+     end)}
+  end
+
+  # player chat, reactions and anything else are not for spectators
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   @impl true
@@ -128,12 +184,16 @@ defmodule TienLenWeb.SpectateLive do
       </div>
 
       <%!-- M3: same phone layout as the table: opponents in one row, full-width centre --%>
-      <div id="watch-table" class="grid grid-cols-3 gap-2 sm:gap-3 items-center">
+      <div
+        id="watch-table"
+        phx-hook="Throws"
+        class="grid grid-cols-3 gap-2 sm:gap-3 items-center"
+      >
         <div class="col-start-2 row-start-1 min-w-0 sm:justify-self-center">
-          <.wseat view={@view} seat={2} secs={@secs} />
+          <.wseat view={@view} seat={2} secs={@secs} marks={@marks} runaways={@runaways} />
         </div>
         <div class="col-start-1 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-start">
-          <.wseat view={@view} seat={3} secs={@secs} />
+          <.wseat view={@view} seat={3} secs={@secs} marks={@marks} runaways={@runaways} />
         </div>
         <div
           id="centre"
@@ -155,12 +215,21 @@ defmodule TienLenWeb.SpectateLive do
           <% end %>
         </div>
         <div class="col-start-3 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-end">
-          <.wseat view={@view} seat={1} secs={@secs} />
+          <.wseat view={@view} seat={1} secs={@secs} marks={@marks} runaways={@runaways} />
         </div>
         <div class="col-span-3 row-start-3 justify-self-center">
-          <.wseat view={@view} seat={0} secs={@secs} />
+          <.wseat view={@view} seat={0} secs={@secs} marks={@marks} runaways={@runaways} />
         </div>
       </div>
+
+      <p
+        :if={@ticker}
+        id="commentary"
+        class="ticker text-center text-sm font-semibold text-warning"
+        aria-live="polite"
+      >
+        {elem(@ticker, 0)}
+      </p>
 
       <section
         :if={@view.status == :waiting and @view.game}
@@ -186,6 +255,8 @@ defmodule TienLenWeb.SpectateLive do
   attr :view, :map, required: true
   attr :seat, :integer, required: true
   attr :secs, :integer, default: nil
+  attr :marks, :map, default: %{}
+  attr :runaways, :map, default: %{}
 
   defp wseat(assigns) do
     assigns = assign(assigns, player: player(assigns.view, assigns.seat), game: assigns.view.game)
@@ -194,17 +265,27 @@ defmodule TienLenWeb.SpectateLive do
     <div
       id={"watch-seat-#{@seat}"}
       class={[
-        "rounded-box border px-2 py-1 w-full sm:w-auto sm:min-w-24 text-center text-sm",
+        "relative rounded-box border px-2 py-1 w-full sm:w-auto sm:min-w-24 text-center text-sm",
         @game && @view.status == :playing && @game.current == @seat && "border-primary bg-primary/10"
       ]}
     >
-      <p :if={!@player} class="text-base-content/50">Trống</p>
+      <p :if={!@player} class="text-base-content/50">
+        Trống <span :if={@runaways[@seat]} class="slipper-drop text-2xl">🩴</span>
+      </p>
+      <span
+        :if={@player && @marks[@seat]}
+        id={"watch-mark-#{@seat}-#{elem(@marks[@seat], 2)}"}
+        class="throw-mark absolute inset-0 z-20 flex items-center justify-center text-3xl pointer-events-none"
+        aria-hidden="true"
+      >
+        {elem(@marks[@seat], 0)}
+      </span>
       <div :if={@player}>
         <p class="font-semibold truncate max-w-40">
           <span :if={@player.host}>👑</span> {Text.avatar(@player)} {@player.name}
         </p>
         <div :if={@game && @seat in @game.seats} class="flex items-center justify-center gap-2">
-          <.card_backs count={@game.card_counts[@seat]} />
+          <.card_backs count={@game.card_counts[@seat]} back={@player.card_back} />
           <span :if={@seat in @game.passed} class="badge badge-sm">Bỏ lượt</span>
           <span
             :if={@view.status == :playing and @game.current == @seat and @secs}

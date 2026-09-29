@@ -103,3 +103,121 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* -- Batch 14: fun extras (TH1, RC1, SH1). Looks only, no game logic. -------------------- */
+
+/* TH1: the mark a thrown item leaves on a seat. Hidden while the item flies (~0.7 s), then
+   pops in and fades out after 3 s. */
+@keyframes throw-mark {
+  0%, 18% { opacity: 0; transform: scale(0.3); }
+  24% { opacity: 1; transform: scale(1.4); }
+  30% { transform: scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.throw-mark { animation: throw-mark 3.7s ease-out forwards; }
+
+/* RC1: a slipper drops onto the seat of a player who ran away */
+@keyframes slipper-drop {
+  0% { opacity: 0; transform: translateY(-40px) rotate(-60deg); }
+  40% { opacity: 1; transform: translateY(0) rotate(15deg); }
+  55% { transform: translateY(-6px) rotate(-5deg); }
+  70%, 85% { opacity: 1; transform: translateY(0) rotate(0); }
+  100% { opacity: 0; }
+}
+.slipper-drop { display: inline-block; animation: slipper-drop 4s ease-out forwards; }
+
+/* BL3: the commentator's latest line */
+@keyframes ticker-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ticker { animation: ticker-in 0.3s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .throw-mark, .slipper-drop, .ticker { animation: none; }
+}
+
+/* SH1: table themes (the centre "felt"). Custom felts set their own text colour. */
+.felt-felt { background: color-mix(in oklab, var(--color-success) 15%, transparent); }
+.felt-custom p { color: inherit; }
+.felt-custom::after {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.2rem;
+  font-size: 1.1rem;
+  opacity: 0.7;
+  pointer-events: none;
+}
+.felt-quan_coc {
+  color: #fff8e7;
+  background: repeating-linear-gradient(90deg, #9a6134 0 22px, #87532b 22px 24px);
+}
+.felt-quan_coc::after { content: "🪑 🍵 🥜"; }
+.felt-ca_phe {
+  color: #fdf3e3;
+  background: radial-gradient(circle at 30% 30%, #7b5840, #3b2a1e);
+}
+.felt-ca_phe::after { content: "☕ 🥛"; }
+.felt-ruong_lua {
+  color: #1f2d0a;
+  background: repeating-linear-gradient(170deg, #b5d86a 0 14px, #9cc450 14px 28px);
+}
+.felt-ruong_lua::after { content: "🌾 🐃"; }
+.felt-bai_bien {
+  color: #1e293b;
+  background: linear-gradient(to bottom, #7dd3fc 0 30%, #bae6fd 30% 38%, #fde68a 38%);
+}
+.felt-bai_bien::after { content: "🏖️ 🦀"; }
+.felt-tet {
+  color: #ffe8a3;
+  background: radial-gradient(circle, #d62828, #8b0000);
+  box-shadow: inset 0 0 0 3px #f4c542;
+}
+.felt-tet::after { content: "🧧 🌸"; }
+.felt-trung_thu {
+  color: #fde68a;
+  background:
+    radial-gradient(circle at 85% 20%, #fef9c3 0 14px, transparent 16px),
+    linear-gradient(#1e1b4b, #312e81);
+}
+.felt-trung_thu::after { content: "🏮 🐇"; }
+.felt-vu_tru {
+  color: #e0e7ff;
+  background:
+    radial-gradient(1px 1px at 20% 30%, #fff, transparent),
+    radial-gradient(1px 1px at 70% 60%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 40% 80%, #fff, transparent),
+    radial-gradient(1px 1px at 85% 15%, #fff, transparent),
+    radial-gradient(circle at 50% 50%, #2e1a5c, #05030f);
+}
+.felt-vu_tru::after { content: "🪐 🚀"; }
+.felt-song_bai {
+  color: #f8f1d8;
+  background: radial-gradient(circle, #0b6e4f, #053b2a);
+  box-shadow: inset 0 0 0 3px #d4af37;
+}
+.felt-song_bai::after { content: "🎰 🎲"; }
+
+/* SH1: card backs (the classic back is the SVG image) */
+.card-back-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 5 / 7;
+  border: 2px solid #fff;
+  line-height: 1;
+}
+.back-heo_dat { background: repeating-radial-gradient(circle, #f9a8d4 0 4px, #f472b6 4px 6px); }
+.back-meo_u { background: repeating-linear-gradient(45deg, #fcd34d 0 5px, #fbbf24 5px 10px); }
+.back-lixi { background: #dc2626; border-color: #f4c542; }
+.back-tra_sua { background: linear-gradient(#e7d3bd 0 60%, #3f2a1c 60%); }
+.back-banh_mi { background: repeating-linear-gradient(-30deg, #f5c16c 0 6px, #e0a24a 6px 8px); }
+.back-hoa_mai { background: radial-gradient(circle, #fef08a, #eab308); }
+.back-ngan_ha {
+  background:
+    radial-gradient(1px 1px at 30% 20%, #fff, transparent),
+    radial-gradient(1px 1px at 70% 70%, #fff, transparent),
+    radial-gradient(circle, #6d28d9, #1e1b4b);
+}
+.back-rong_vang { background: linear-gradient(135deg, #b91c1c, #f59e0b); border-color: #fde68a; }

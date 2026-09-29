@@ -88,17 +88,19 @@ A crashed room is not restarted: its players return to the lobby. Everything in 
 | `TienLen.Hint` | Legal plays from a hand, validated by `Game` | H1 |
 | `TienLen.Bot` | Bot decisions (dễ / thường) | B5, B6 |
 | `TienLen.Replay` | Frames of a stored replay | V5 |
+| `TienLen.Commentary` | Public events of one change → funny commentator lines (template pick injected) | BL1, BL2, RC1 |
+| `TienLen.Throws` | Throwable items (🍅 🥚 🩴 🌹), prices, cooldown | TH1–TH3 |
 
 **Processes** (in memory):
 
 | Module | Responsibility |
 |---|---|
-| `TienLen.RoomServer` | Serialises commands; turn timer (20 s); disconnect timer (20 s); monitors players and spectators; bot actions (`bot_delay`); coin settlement (via `Economy`) then result recording (via `Stats`); room chat (last 50); reactions; replay capture; broadcasts events only |
+| `TienLen.RoomServer` | Serialises commands; turn timer (20 s); disconnect timer (20 s); monitors players and spectators; bot actions (`bot_delay`); coin settlement (via `Economy`) then result recording (via `Stats`); room chat (last 50) and the commentator's lines; reactions; throws (checked, paid, then broadcast); replay capture; broadcasts events only |
 | `TienLen.Lobby` | Thin API over rooms: create/open/join/leave, public and all room lists |
 | `TienLen.Presence` | Phoenix.Presence on `"online"`: `%{name, username, avatar, place, room_id}` |
 | `TienLen.Chat` (+ `Chat.Lobby`, `Chat.Private`) | Message rules (G2), sender checks (locked / muted), quick phrases, reactions list |
 | `TienLen.Invites` | Invite checks, one pending per target, expiry, answers |
-| `TienLen.RateLimit`, `TienLen.LoginThrottle` | ETS counters |
+| `TienLen.RateLimit`, `TienLen.LoginThrottle` | ETS counters (also the 3 s throw cooldown) |
 | `TienLen.Seasons.Scheduler` | Calls `Seasons.payout_due/0` hourly |
 
 **Contexts** (PostgreSQL):
@@ -106,19 +108,20 @@ A crashed room is not restarted: its players return to the lobby. Everything in 
 | Module | Responsibility |
 |---|---|
 | `TienLen.Accounts` | Registration, login, passwords (bcrypt), display name, avatar, invite setting, search |
-| `TienLen.Economy` | **The only module that changes coins**: ledger, row locks, idempotency keys, settlement, daily bonus, relief, admin adjust, `grant/5` (missions, seasons) |
+| `TienLen.Economy` | **The only module that changes coins**: ledger, row locks, idempotency keys, settlement, daily bonus, relief, admin adjust, `grant/5` (missions, seasons), `spend/5` (throws, shop, T26) |
 | `TienLen.Stats` | Recording results (with per-player chops / coins / instant and the replay), leaderboards (all-time, by period), history, profile numbers, replay access |
 | `TienLen.Admin` | Every admin action, role re-checked and audited |
 | `TienLen.Settings` | Admin-editable economy / reward settings and the announcement, cached |
 | `TienLen.Friends` | Friend requests and friendships |
 | `TienLen.Missions` | Daily missions and their rewards |
 | `TienLen.Seasons` | Weekly seasons, standings, payouts |
+| `TienLen.Shop` | Card backs and table themes: catalogue, owned items, buy (one transaction with `Economy.spend/5`), equip | SH1–SH3 |
 
 ### 2.4 Database
 
 | Table | Content |
 |---|---|
-| `users` | `username` (unique, lowercase), `display_name`, `hashed_password`, `coins` (≥ 0 check), `daily_bonus_on`, `relief_on`, `role` (`player`/`admin`), `locked_at`, `accept_invites`, `muted_until`, `avatar` |
+| `users` | `username` (unique, lowercase), `display_name`, `hashed_password`, `coins` (≥ 0 check), `daily_bonus_on`, `relief_on`, `role` (`player`/`admin`), `locked_at`, `accept_invites`, `muted_until`, `avatar`, `card_back`, `table_theme` |
 | `games` | `room_id`, `ref` (`room:<id>:game:<n>`), `player_count`, `instant_win`, `finished_at`, `replay` (jsonb: seats, dealt hands, public events) |
 | `game_players` | `game_id`, `user_id`, `seat`, `place`, `won`, `removed`, `chops`, `coins`, `instant` |
 | `coin_transactions` | Append-only ledger: `user_id`, `counterparty_id`, `amount`, `balance_after`, `reason`, `ref` |
@@ -126,6 +129,7 @@ A crashed room is not restarted: its players return to the lobby. Everything in 
 | `admin_actions` | Audit log: admin, action, target, details, reason |
 | `settings` | Key/value admin settings |
 | `friendships` | `user_id` → `friend_id`, `status` (`pending`/`accepted`), unique pair, not self |
+| `user_items` | Bought shop items: `user_id`, `item_id`, unique pair (never paid twice) |
 
 Only games without bots are recorded (B3). Chat messages are never stored (CH2).
 
@@ -151,7 +155,7 @@ Only games without bots are recorded (B3). Chat messages are never stored (CH2).
 }
 ```
 
-`%Room{}` wraps it with seats (`%{player_id, name, connected, avatar, bot?}`), host, status, stake, private flag, banned ids, `game_players` (seat → user id), `game_no` and `game_chops`.
+`%Room{}` wraps it with seats (`%{player_id, name, connected, avatar, card_back, bot?}`), host, status, stake, private flag, banned ids, `game_players` (seat → user id), `game_no` and `game_chops`.
 
 ### 2.6 Game state machine
 
@@ -190,10 +194,11 @@ TableLive (player id = user id from the session)
                          settle coins (Economy.settle, idempotent keys) → capture replay →
                          at game over: Stats.record(result + coins + replay) →
                          PubSub {:room_updated, id, version, events} on "room:<id>" →
-                         each page re-reads its own projection (RoomServer.view / spectator_view)
+                         each page re-reads its own projection (RoomServer.view / spectator_view) →
+                         Commentary.lines(old room, new room, events) → {:room_chat, …} (system)
 ```
 
-Events carry public facts only. Chat (`{:room_chat, …}`), reactions (`{:reaction, …}`) and spectator counts use the same room topic.
+Events carry public facts only. Chat (`{:room_chat, …}`, commentator lines have `system: true`), reactions (`{:reaction, …}`), throws (`{:thrown, id, from_seat, to_seat, item}`) and spectator counts use the same room topic. The flight of a thrown item is the `Throws` JS hook (looks only); the mark on the seat is rendered by the server.
 
 **PubSub topics:**
 - `room:<id>`;
@@ -205,8 +210,8 @@ Events carry public facts only. Chat (`{:room_chat, …}`), reactions (`{:reacti
 
 | Who | Sees |
 |---|---|
-| Seated player | Own hand and selection; everyone's card counts; centre, turn, timer, passes, ranking; coin results; room chat |
-| Spectator (`/phong/:id/xem`) | `Room.view(room, nil)`: no hand at all; no room chat |
+| Seated player | Own hand and selection; everyone's card counts and card backs; centre, turn, timer, passes, ranking; coin results; room chat with the commentator; throws; own table theme |
+| Spectator (`/phong/:id/xem`) | `Room.view(room, nil)`: no hand at all; no room chat, only the commentator's latest line; throws; card backs |
 | Admin watch (`/quan-tri/phong/:id`) | Every hand, undealt cards, room chat (AD7) |
 | Replay (`/van/:id`) | Every dealt hand and every play, only after the game is recorded, for its players and admins |
 
@@ -217,13 +222,14 @@ Never broadcast: hands, undealt cards, seeds, selections. Instant-win hands are 
 | Path | Page | Access |
 |---|---|---|
 | `/` | Lobby: register / login, rooms (create, stake, private), missions, lobby chat, online list, settings (password, invites) | public / logged in |
-| `/phong/:id` | Table: play, hints, sort, bots, invites, copy link, private toggle, reactions, room chat | logged in (else `/?next=`) |
+| `/phong/:id` | Table: play, hints, sort, bots, invites, copy link, private toggle, reactions, throws, commentator, room chat | logged in (else `/?next=`) |
 | `/phong/:id/xem` | Spectator view | logged in |
 | `/van/:id` | Replay | players of the game, admins |
 | `/bang-xep-hang` | Leaderboards: 1st places, this week, last week, richest | logged in |
 | `/lich-su`, `/lich-su-coin` | Game history (replay links), coin ledger | logged in |
 | `/nguoi-choi/:username` | Profile, avatar picker, friend button | logged in |
 | `/ban-be` | Friends | logged in |
+| `/cua-hang` | Shop: card backs, table themes | logged in |
 | `/quan-tri/*` | Dashboard, users, rooms (watch / close / kick), games, audit log, settings | admins |
 | `POST /dang-nhap`, `DELETE /dang-xuat` | Session controller (login throttle, `next`) | – |
 

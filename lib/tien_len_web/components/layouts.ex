@@ -110,6 +110,14 @@ defmodule TienLenWeb.Layouts do
           </.link>
           <.link
             :if={@current_user}
+            navigate={~p"/cua-hang"}
+            id="shop-link"
+            class="btn btn-ghost btn-sm justify-start sm:justify-center"
+          >
+            Cửa hàng
+          </.link>
+          <.link
+            :if={@current_user}
             navigate={~p"/ban-be"}
             id="friends-link"
             class="btn btn-ghost btn-sm justify-start sm:justify-center"

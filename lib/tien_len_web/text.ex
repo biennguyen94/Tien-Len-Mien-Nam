@@ -57,6 +57,11 @@ defmodule TienLenWeb.Text do
     invalid_message: "Tin nhắn phải có 1–200 ký tự",
     muted: "Bạn đang bị cấm chat",
     chat_too_fast: "Bạn gửi tin quá nhanh, chờ vài giây",
+    invalid_target: "Chỉ ném được vào ghế có người khác",
+    throw_too_fast: "Từ từ, 3 giây mới ném được một lần",
+    cannot_afford: "Bạn không đủ coin",
+    already_owned: "Bạn đã có món này rồi",
+    not_owned: "Bạn chưa mua món này",
     not_online: "Người này không online",
     invites_off: "Người này không nhận lời mời",
     invite_pending: "Người này đang có lời mời khác",
@@ -128,7 +133,9 @@ defmodule TienLenWeb.Text do
     "thoi" => "Thối heo",
     "admin_adjust" => "Quản trị viên điều chỉnh",
     "mission" => "Nhiệm vụ ngày",
-    "season_reward" => "Thưởng mùa giải"
+    "season_reward" => "Thưởng mùa giải",
+    "throw" => "Ném đồ",
+    "shop" => "Mua ở cửa hàng"
   }
 
   @doc "A player's avatar (P3), or the default face."

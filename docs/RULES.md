@@ -241,7 +241,7 @@ Coins are virtual and only exist inside the game (C1). **All amounts are compute
 
 | # | Rule |
 |---|---|
-| T19 | **Balances:** 1,000 on registration; daily bonus 100 (once per Vietnam day); relief 500 when the balance is below 100 (once per Vietnam day). No transfers, deposits or withdrawals. A balance is never negative. |
+| T19 | **Balances:** 1,000 on registration; daily bonus 100 (once per Vietnam day); relief 500 when the balance is below 100 (once per Vietnam day). No transfers, deposits or withdrawals (spending: T26). A balance is never negative. |
 | T20 | **Eligibility:** only connected players with at least **10×S** are dealt in (C9, E7). |
 | T21 | **Place payments** at game over (C4, E1): 4 players: Bét → Nhất S, Ba → Nhì ⌊S/2⌋. 3 players: Bét → Nhất S. 2 players: Bét → Nhất S. |
 | T22 | **Instant win** (C5, E2): every non-winner pays 2×S to every instant winner. Nothing else is paid in that game. |
@@ -266,6 +266,15 @@ Coins are virtual and only exist inside the game (C1). **All amounts are compute
 - **Weekly season**: Monday 00:00 to Sunday 24:00 Vietnam time, ranked by 1st places in that week's recorded games (ties as in the leaderboard). The top 3 with at least one win get 1,000 / 500 / 300 coins after the week ends.
 - Games with bots are not recorded, so they count for neither. All amounts are admin settings.
 
+## 17c. Spending coins and fun extras (TH1–TH4, BL1–BL3, RC1, SH1–SH3)
+
+| # | Rule |
+|---|---|
+| T26 | **Spending** (the only way coins leave the game): throwing an item at another seat (🍅 1, 🥚 2, 🩴 3, 🌹 5 coins, 3 s cooldown) and buying a card back or table theme in the shop (once per item, kept forever). The server checks the balance and spends in one transaction; a balance never goes negative. Nothing bought or thrown changes a game. |
+
+- The **commentator** posts lines in the room chat from public events; at game over it may tell how many 2s the thối heo loser held (BL2).
+- Leaving during a game still removes the player from it (§12); nobody plays in their place (RC1).
+
 ## 18. Rule ↔ decision map
 
 | Rule | Decisions |
@@ -289,3 +298,4 @@ Coins are virtual and only exist inside the game (C1). **All amounts are compute
 | T17 | D1, R3 |
 | T18 | I1–I8 |
 | T19–T25 | C1–C10, E1–E9 |
+| T26 | TH1–TH4, SH1–SH3 |

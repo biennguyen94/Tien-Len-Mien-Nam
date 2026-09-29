@@ -17,7 +17,9 @@ defmodule TienLen.RoomServer do
     disconnect timeout, or when nobody joins within that time after creation (X9).
   - Tells the lobby (`TienLen.Lobby.topic/0`) when its summary may have changed
     (`{:lobby_updated, id}`) and when it closes (`{:room_closed, id}`).
-  - `view/2` answers only seated players: there are no spectators (#17).
+  - `view/2` answers only seated players; spectators use `watch/1` and `spectator_view/1` (V1).
+  - After every change the commentator (`TienLen.Commentary`, BL1) may post lines in the room
+    chat; players can throw items at each other (`throw/4`, TH1).
 
   Options for `start_room/1`: `:id`, `:turn_timeout` and `:disconnect_timeout` (ms), `:deals` (a
   list of `TienLen.Room.deal()` used for successive games, for tests; otherwise a fresh
@@ -108,11 +110,19 @@ defmodule TienLen.RoomServer do
   end
 
   @doc "Seats (or reconnects) `player_id` and monitors the calling process."
-  def join(room_id, player_id, name, avatar \\ nil),
-    do: call(room_id, {:join, player_id, name, avatar})
+  def join(room_id, player_id, name, avatar \\ nil, card_back \\ nil),
+    do: call(room_id, {:join, player_id, name, avatar, card_back})
 
   @doc "A seated player shows an emoji on their seat (R1); broadcasts `{:reaction, room_id, seat, emoji}`."
   def react(room_id, player_id, emoji), do: call(room_id, {:react, player_id, emoji})
+
+  @doc """
+  A seated player throws `item_id` (`TienLen.Throws`) at another occupied seat (TH1–TH3): at
+  most one throw per #{3} s, the price is spent first. Broadcasts
+  `{:thrown, room_id, from_seat, to_seat, item_id}`.
+  """
+  def throw(room_id, player_id, to_seat, item_id),
+    do: call(room_id, {:throw, player_id, to_seat, item_id})
 
   def leave(room_id, player_id), do: call(room_id, {:leave, player_id})
   def start_game(room_id, player_id), do: call(room_id, {:start_game, player_id})
@@ -253,10 +263,13 @@ defmodule TienLen.RoomServer do
 
   @impl true
   def handle_call({:join, player_id, name}, from, state),
-    do: handle_call({:join, player_id, name, nil}, from, state)
+    do: handle_call({:join, player_id, name, nil, nil}, from, state)
 
-  def handle_call({:join, player_id, name, avatar}, {pid, _tag}, state) do
-    case Room.join(state.room, player_id, name, avatar) do
+  def handle_call({:join, player_id, name, avatar}, from, state),
+    do: handle_call({:join, player_id, name, avatar, nil}, from, state)
+
+  def handle_call({:join, player_id, name, avatar, card_back}, {pid, _tag}, state) do
+    case Room.join(state.room, player_id, name, avatar, card_back) do
       {:ok, room, seat, events} ->
         state = state |> track(pid, player_id) |> cancel_disconnect_timer(player_id)
         {:reply, {:ok, seat}, changed(state, room, events)}
@@ -365,6 +378,31 @@ defmodule TienLen.RoomServer do
         else
           {:reply, {:error, :unknown_command}, state}
         end
+    end
+  end
+
+  def handle_call({:throw, player_id, to_seat, item_id}, _from, state) do
+    from_seat = Room.seat_of(state.room, player_id)
+    item = TienLen.Throws.item(item_id)
+
+    with :ok <- if(from_seat, do: :ok, else: {:error, :not_in_room}),
+         :ok <- if(item, do: :ok, else: {:error, :unknown_command}),
+         :ok <-
+           if(to_seat != from_seat and Map.has_key?(state.room.seats, to_seat),
+             do: :ok,
+             else: {:error, :invalid_target}
+           ),
+         :ok <- throw_rate(player_id),
+         :ok <- pay_throw(state, player_id, item) do
+      Phoenix.PubSub.broadcast(
+        TienLen.PubSub,
+        topic(state.id),
+        {:thrown, state.id, from_seat, to_seat, item.id}
+      )
+
+      {:reply, :ok, state}
+    else
+      error -> {:reply, error, state}
     end
   end
 
@@ -586,6 +624,8 @@ defmodule TienLen.RoomServer do
 
   # Applies a new room, reschedules the turn timer and broadcasts the public events.
   defp changed(state, room, events) do
+    old_room = state.room
+
     state =
       %{state | room: room, version: state.version + 1}
       |> reschedule_turn(events)
@@ -606,7 +646,30 @@ defmodule TienLen.RoomServer do
       Phoenix.PubSub.broadcast(TienLen.PubSub, TienLen.Lobby.topic(), {:lobby_updated, state.id})
     end
 
-    state
+    comment(state, old_room, events)
+  end
+
+  # BL1: the commentator's lines go to the room chat like any message (no user id)
+  defp comment(state, old_room, events) do
+    old_room
+    |> TienLen.Commentary.lines(state.room, events)
+    |> Enum.reduce(state, fn text, st ->
+      msg = %{
+        id: System.unique_integer([:positive, :monotonic]),
+        user_id: nil,
+        name: TienLen.Commentary.name(),
+        text: text,
+        at: DateTime.utc_now(:second),
+        system: true
+      }
+
+      Phoenix.PubSub.broadcast(TienLen.PubSub, topic(st.id), {:room_chat, st.id, msg})
+      %{st | chat: Enum.take([msg | st.chat], @chat_keep)}
+    end)
+  rescue
+    error ->
+      Logger.error("room #{state.id}: commentary failed: #{Exception.message(error)}")
+      state
   end
 
   # -- coins (T20–T25, E6) ----------------------------------------------------------
@@ -716,6 +779,30 @@ defmodule TienLen.RoomServer do
   catch
     kind, reason ->
       Logger.error("room #{id}: could not record the game result: #{inspect({kind, reason})}")
+  end
+
+  # -- throwing items (TH1–TH4) ---------------------------------------------------------
+
+  defp throw_rate(player_id) do
+    case TienLen.RateLimit.hit({:throw, player_id}, 1, TienLen.Throws.cooldown()) do
+      :ok -> :ok
+      {:error, :rate_limited} -> {:error, :throw_too_fast}
+    end
+  end
+
+  # no economy (tests): throws are free
+  defp pay_throw(%{economy: nil}, _player_id, _item), do: :ok
+
+  defp pay_throw(state, player_id, item) do
+    case state.economy.spend(player_id, item.price, "throw", "#{item.emoji} phòng #{state.id}") do
+      {:ok, _balance} -> :ok
+      {:error, :insufficient_coins} -> {:error, :cannot_afford}
+      {:error, _} = error -> error
+    end
+  rescue
+    error ->
+      Logger.error("room #{state.id}: throw payment failed: #{Exception.message(error)}")
+      {:error, :unknown_request}
   end
 
   # -- spectators (V1–V4) -------------------------------------------------------------

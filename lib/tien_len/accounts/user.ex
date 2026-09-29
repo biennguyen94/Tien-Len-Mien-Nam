@@ -27,6 +27,9 @@ defmodule TienLen.Accounts.User do
     field :muted_until, :utc_datetime
     # P3: one of TienLen.Accounts.avatars/0, chosen by the player
     field :avatar, :string
+    # SH3: equipped shop items (nil = the free default), set only by TienLen.Shop
+    field :card_back, :string
+    field :table_theme, :string
 
     timestamps type: :utc_datetime
   end

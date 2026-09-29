@@ -159,16 +159,16 @@ defmodule TienLen.Room do
   Seats a player (first free seat) or reconnects an already seated one. New players cannot join
   during a game (R6) or when the 4 seats are taken. The first player becomes host.
   """
-  @spec join(t(), player_id(), String.t(), String.t() | nil) ::
+  @spec join(t(), player_id(), String.t(), String.t() | nil, String.t() | nil) ::
           {:ok, t(), seat(), [event()]} | {:error, atom()}
-  def join(room, player_id, name, avatar \\ nil) do
+  def join(room, player_id, name, avatar \\ nil, card_back \\ nil) do
     case seat_of(room, player_id) do
       nil ->
         cond do
           MapSet.member?(room.banned, player_id) -> {:error, :kicked}
           room.status == :playing -> {:error, :game_in_progress}
           map_size(room.seats) >= @max_seats -> {:error, :room_full}
-          true -> seat_new_player(room, player_id, name, avatar)
+          true -> seat_new_player(room, player_id, name, avatar, card_back)
         end
 
       seat ->
@@ -176,16 +176,29 @@ defmodule TienLen.Room do
           update_player(
             room,
             seat,
-            &Map.merge(&1, %{connected: true, avatar: avatar || Map.get(&1, :avatar)})
+            &Map.merge(&1, %{
+              connected: true,
+              avatar: avatar || Map.get(&1, :avatar),
+              card_back: card_back || Map.get(&1, :card_back)
+            })
           )
 
         {:ok, room, seat, [{:connected, seat}]}
     end
   end
 
-  defp seat_new_player(room, player_id, name, avatar) do
+  defp seat_new_player(room, player_id, name, avatar, card_back) do
     seat = Enum.find(0..(@max_seats - 1), &(not Map.has_key?(room.seats, &1)))
-    player = %{player_id: player_id, name: name, connected: true, avatar: avatar}
+
+    player = %{
+      player_id: player_id,
+      name: name,
+      connected: true,
+      avatar: avatar,
+      # SH1: the equipped card back, shown to everyone on this seat's pile
+      card_back: card_back
+    }
+
     room = %{room | seats: Map.put(room.seats, seat, player), host: room.host || seat}
     {:ok, room, seat, [{:joined, seat}]}
   end
@@ -455,7 +468,8 @@ defmodule TienLen.Room do
             connected: p.connected,
             host: seat == room.host,
             bot: Map.get(p, :bot),
-            avatar: Map.get(p, :avatar)
+            avatar: Map.get(p, :avatar),
+            card_back: Map.get(p, :card_back)
           }
         end),
       game: room.game && Game.view(room.game, me)
