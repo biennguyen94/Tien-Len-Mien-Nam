@@ -32,7 +32,9 @@ defmodule TienLenWeb.ProfileLive do
       week: week,
       relation: Friends.relation(me.id, user.id),
       online: Presence.get_user(user.id),
-      coins: TienLen.Economy.balance(user.id)
+      coins: TienLen.Economy.balance(user.id),
+      # XH3
+      titles: TienLen.Shame.titles_of(user.id)
     )
   end
 
@@ -92,7 +94,14 @@ defmodule TienLenWeb.ProfileLive do
       social={@social}
     >
       <section id="profile" class="card bg-base-200 p-4 flex flex-row items-center gap-4">
-        <span id="profile-avatar" class="text-6xl">{Text.avatar(@user)}</span>
+        <span id="profile-avatar" class="text-6xl">
+          {Text.avatar(@user)}<span
+            :if={TienLen.Shop.charm_icon(@user.charm)}
+            id="profile-charm"
+            class="text-3xl"
+            title="Bùa may mắn"
+          >{TienLen.Shop.charm_icon(@user.charm)}</span>
+        </span>
         <div class="flex-1 min-w-0">
           <h1 class="text-xl font-bold truncate">{@user.display_name}</h1>
           <p class="text-sm text-base-content/60">
@@ -104,6 +113,15 @@ defmodule TienLenWeb.ProfileLive do
             </span>
             <span :if={!@online} class="badge badge-ghost badge-sm">Offline</span>
             <span class="ml-1">🪙 {Text.coins(@coins)}</span>
+          </p>
+          <p :if={@titles != []} id="profile-titles" class="text-sm flex flex-wrap gap-1 mt-1">
+            <.link
+              :for={t <- @titles}
+              navigate={~p"/tuong-xau-ho"}
+              class="badge badge-warning badge-sm"
+            >
+              {t.emoji} {t.name}
+            </.link>
           </p>
         </div>
       </section>

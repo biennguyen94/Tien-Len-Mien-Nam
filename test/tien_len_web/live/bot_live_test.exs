@@ -23,13 +23,13 @@ defmodule TienLenWeb.BotLiveTest do
     assert has_element?(an, "#start[disabled]")
 
     an |> element("#add-bot-normal") |> render_click()
-    assert has_element?(an, "#seat-1", "Máy 1 (thường)")
+    assert has_element?(an, "#seat-1", "Bà Tám (thường)")
     assert has_element?(an, "#seat-1 [title='Máy chơi']")
     assert render(an) =~ "không tính coin"
     refute has_element?(an, "#start[disabled]")
 
     an |> element("#remove-bot-1") |> render_click()
-    refute has_element?(an, "#seat-1", "Máy")
+    refute has_element?(an, "#seat-1", "Bà Tám")
 
     an |> element("#add-bot-easy") |> render_click()
     an |> element("#start") |> render_click()

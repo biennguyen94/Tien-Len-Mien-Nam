@@ -27,7 +27,11 @@ defmodule TienLen.InvitesTest do
   setup do
     a = user("An")
     b = user("Binh")
-    id = room!()
+    # a fixed deal: a random one can be an instant win that ends the game at once
+    deal =
+      {:hands, %{0 => TienLen.Card.parse_many!("3D 4D"), 1 => TienLen.Card.parse_many!("5D 6D")}}
+
+    id = room!(deals: [deal])
     {:ok, _} = RoomServer.join(id, a.id, "An")
     online(b)
     %{a: a, b: b, id: id}

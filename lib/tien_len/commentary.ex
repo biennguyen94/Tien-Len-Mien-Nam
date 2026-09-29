@@ -120,41 +120,40 @@ defmodule TienLen.Commentary do
 
   # A chop: an out-of-turn four-pair, or a bomb played on a chop target (like the P2 count).
   defp chop_line(type, seat, combo, old, name, say) do
+    case chopped_centre(type, combo, old) do
+      nil ->
+        []
+
+      centre ->
+        kind = if Game.twos_units(centre.combo.cards) > 0, do: :chop, else: :chop_again
+        [say.(kind, a: name.(seat), b: name.(centre.owner))]
+    end
+  end
+
+  @doc """
+  The centre that a `{:played | :chopped, seat, combo}` event chopped (its `owner` is the
+  victim), or `nil`. `old` is the room before the change.
+  """
+  def chopped_centre(type, combo, old) do
     centre = old.game && old.game.centre
 
     if centre != nil and (type == :chopped or Combination.bomb?(combo)) and
-         Rules.chop_target?(centre) do
-      kind = if Game.twos_units(centre.combo.cards) > 0, do: :chop, else: :chop_again
-      [say.(kind, a: name.(seat), b: name.(centre.owner))]
-    else
-      []
-    end
+         Rules.chop_target?(centre),
+       do: centre
   end
 
   # At a normal game over the last player still holding cards may be cóng and / or thối heo.
   defp loser_lines(%Game{} = game, name, say) do
-    if Game.instant_win?(game) do
-      []
-    else
-      ranked = Enum.map(game.ranking || [], &hd/1)
+    case Room.last_holder(game) do
+      nil ->
+        []
 
-      # like Payout.thoi/2: nobody is the loser when the last player left ranks 1st (all
-      # the others were removed)
-      case Enum.find_index(ranked, &(&1 not in game.finished and &1 not in game.removed)) do
-        nil ->
-          []
-
-        0 ->
-          []
-
-        i ->
-          seat = Enum.at(ranked, i)
-          hand = game.hands[seat]
-          twos = Enum.count(hand, &(&1.rank == 15))
-          cong = if length(hand) == 13, do: [say.(:cong, a: name.(seat))], else: []
-          thoi = if twos > 0, do: [say.(:thoi, a: name.(seat), n: twos)], else: []
-          cong ++ thoi
-      end
+      seat ->
+        hand = game.hands[seat]
+        twos = Enum.count(hand, &(&1.rank == 15))
+        cong = if length(hand) == 13, do: [say.(:cong, a: name.(seat))], else: []
+        thoi = if twos > 0, do: [say.(:thoi, a: name.(seat), n: twos)], else: []
+        cong ++ thoi
     end
   end
 
@@ -170,6 +169,28 @@ defmodule TienLen.Commentary do
       %{name: name} -> name
       _ -> "?"
     end
+  end
+
+  @doc """
+  Sound / visual effect kinds of one room change (SF1), from public events only:
+  `"pig"` (a play with a 2), `"chop"` (a chặt heo / chặt chồng), `"confetti"` (tới trắng).
+  """
+  @spec effects(Room.t(), list()) :: [String.t()]
+  def effects(old_room, events) do
+    events
+    |> Enum.flat_map(fn
+      {type, _seat, combo} when type in [:played, :chopped] ->
+        chop = if chopped_centre(type, combo, old_room), do: ["chop"], else: []
+        pig = if Enum.any?(combo.cards, &(&1.rank == 15)), do: ["pig"], else: []
+        chop ++ pig
+
+      {:instant_win, _} ->
+        ["confetti"]
+
+      _ ->
+        []
+    end)
+    |> Enum.uniq()
   end
 
   defp fill(template, vars) do

@@ -13,5 +13,11 @@ defmodule TienLen.Stats.GamePlayer do
     field :chops, :integer, default: 0
     field :coins, :integer, default: 0
     field :instant, :boolean, default: false
+    # XH2
+    field :thoi, :integer, default: 0
+    field :cong, :boolean, default: false
+    field :passes, :integer, default: 0
+    field :plays, :integer, default: 0
+    field :timeouts, :integer, default: 0
   end
 end

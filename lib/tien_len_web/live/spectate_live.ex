@@ -26,7 +26,8 @@ defmodule TienLenWeb.SpectateLive do
         # batch 14: throw marks, runaway slippers, the commentator's latest line
         marks: %{},
         runaways: %{},
-        ticker: nil
+        ticker: nil,
+        puffs: %{}
       )
 
     cond do
@@ -107,6 +108,20 @@ defmodule TienLenWeb.SpectateLive do
     end
   end
 
+  # TB1
+  def handle_info({:blow, _id, seat}, socket),
+    do:
+      {:noreply,
+       update(
+         socket,
+         :puffs,
+         &Map.put(&1, seat, {now() + 2_000, System.unique_integer([:positive])})
+       )}
+
+  # SF1: effects (not the tick: that is for the player whose turn it is)
+  def handle_info({:effects, _id, kinds}, socket),
+    do: {:noreply, push_event(socket, "sfx", %{kinds: kinds})}
+
   # BL3: only the commentator's lines, as a ticker (the room chat stays with the players, V3)
   def handle_info({:room_chat, _id, %{system: true, text: text}}, socket),
     do: {:noreply, assign(socket, :ticker, {text, now() + 5_000})}
@@ -119,6 +134,7 @@ defmodule TienLenWeb.SpectateLive do
      |> assign(:now, t)
      |> update(:marks, fn m -> Map.reject(m, fn {_s, {_e, until, _n}} -> until <= t end) end)
      |> update(:runaways, fn r -> Map.reject(r, fn {_s, until} -> until <= t end) end)
+     |> update(:puffs, fn r -> Map.reject(r, fn {_s, {until, _n}} -> until <= t end) end)
      |> update(:ticker, fn
        {_text, until} when until <= t -> nil
        ticker -> ticker
@@ -179,6 +195,15 @@ defmodule TienLenWeb.SpectateLive do
           >
             Vào chơi
           </.link>
+          <button
+            id="sound-toggle"
+            phx-hook="Sfx"
+            phx-update="ignore"
+            class="btn btn-ghost btn-sm"
+            title="Âm thanh"
+          >
+            🔊
+          </button>
           <.link navigate={~p"/"} class="btn btn-sm btn-ghost">Về sảnh</.link>
         </div>
       </div>
@@ -187,13 +212,28 @@ defmodule TienLenWeb.SpectateLive do
       <div
         id="watch-table"
         phx-hook="Throws"
+        data-shake
         class="grid grid-cols-3 gap-2 sm:gap-3 items-center"
       >
         <div class="col-start-2 row-start-1 min-w-0 sm:justify-self-center">
-          <.wseat view={@view} seat={2} secs={@secs} marks={@marks} runaways={@runaways} />
+          <.wseat
+            view={@view}
+            seat={2}
+            secs={@secs}
+            marks={@marks}
+            runaways={@runaways}
+            puffs={@puffs}
+          />
         </div>
         <div class="col-start-1 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-start">
-          <.wseat view={@view} seat={3} secs={@secs} marks={@marks} runaways={@runaways} />
+          <.wseat
+            view={@view}
+            seat={3}
+            secs={@secs}
+            marks={@marks}
+            runaways={@runaways}
+            puffs={@puffs}
+          />
         </div>
         <div
           id="centre"
@@ -215,10 +255,24 @@ defmodule TienLenWeb.SpectateLive do
           <% end %>
         </div>
         <div class="col-start-3 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-end">
-          <.wseat view={@view} seat={1} secs={@secs} marks={@marks} runaways={@runaways} />
+          <.wseat
+            view={@view}
+            seat={1}
+            secs={@secs}
+            marks={@marks}
+            runaways={@runaways}
+            puffs={@puffs}
+          />
         </div>
         <div class="col-span-3 row-start-3 justify-self-center">
-          <.wseat view={@view} seat={0} secs={@secs} marks={@marks} runaways={@runaways} />
+          <.wseat
+            view={@view}
+            seat={0}
+            secs={@secs}
+            marks={@marks}
+            runaways={@runaways}
+            puffs={@puffs}
+          />
         </div>
       </div>
 
@@ -257,6 +311,7 @@ defmodule TienLenWeb.SpectateLive do
   attr :secs, :integer, default: nil
   attr :marks, :map, default: %{}
   attr :runaways, :map, default: %{}
+  attr :puffs, :map, default: %{}
 
   defp wseat(assigns) do
     assigns = assign(assigns, player: player(assigns.view, assigns.seat), game: assigns.view.game)
@@ -280,9 +335,22 @@ defmodule TienLenWeb.SpectateLive do
       >
         {elem(@marks[@seat], 0)}
       </span>
+      <span
+        :if={@player && @puffs[@seat]}
+        id={"watch-puff-#{@seat}-#{elem(@puffs[@seat], 1)}"}
+        class="puff absolute left-1/2 -top-8 z-30 text-2xl pointer-events-none"
+        aria-hidden="true"
+      >
+        😮‍💨💨
+      </span>
       <div :if={@player}>
         <p class="font-semibold truncate max-w-40">
-          <span :if={@player.host}>👑</span> {Text.avatar(@player)} {@player.name}
+          <span :if={@player.host}>👑</span> {Text.avatar(@player)}{TienLen.Shop.charm_icon(
+            @player[:charm]
+          )} {@player.name}
+        </p>
+        <p :if={(@player[:titles] || []) != []} class="text-xs leading-tight">
+          <span :for={t <- @player.titles} title={t.name}>{t.emoji}</span>
         </p>
         <div :if={@game && @seat in @game.seats} class="flex items-center justify-center gap-2">
           <.card_backs count={@game.card_counts[@seat]} back={@player.card_back} />

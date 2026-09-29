@@ -45,7 +45,9 @@ defmodule TienLen.Room do
             # IV2 / G11: hidden from the lobby list, joined by invite or link
             private: false,
             # P2: seat => number of chặt heo in the current / last game
-            game_chops: %{}
+            game_chops: %{},
+            # XH2: seat => %{passes, plays, timeouts} in the current / last game
+            game_tally: %{}
 
   @type player_id :: term()
   @type seat :: 0..3
@@ -126,9 +128,24 @@ defmodule TienLen.Room do
          :ok <- if(room.stake == 0, do: :ok, else: {:error, :bots_need_free_room}),
          :ok <- if(map_size(room.seats) < @max_seats, do: :ok, else: {:error, :room_full}) do
       n = Enum.find(1..@max_seats, &(not Map.has_key?(bot_numbers(room), &1)))
-      name = "Máy #{n} (#{TienLen.Bot.label(level)})"
+      # BP1: the first personality not taken by another bot of the room
+      taken = for {_s, p} <- room.seats, do: Map.get(p, :persona)
+      persona = Enum.find(TienLen.BotTalk.personas(), &(&1.id not in taken))
+      name = "#{persona.name} (#{TienLen.Bot.label(level)})"
       free = Enum.find(0..(@max_seats - 1), &(not Map.has_key?(room.seats, &1)))
-      bot = %{player_id: {:bot, n}, name: name, connected: true, bot: level, avatar: "🤖"}
+
+      bot = %{
+        player_id: {:bot, n},
+        name: name,
+        connected: true,
+        bot: level,
+        persona: persona.id,
+        avatar: persona.avatar,
+        card_back: nil,
+        charm: nil,
+        titles: []
+      }
+
       {:ok, %{room | seats: Map.put(room.seats, free, bot)}, [{:joined, free}]}
     end
   end
@@ -159,16 +176,30 @@ defmodule TienLen.Room do
   Seats a player (first free seat) or reconnects an already seated one. New players cannot join
   during a game (R6) or when the 4 seats are taken. The first player becomes host.
   """
-  @spec join(t(), player_id(), String.t(), String.t() | nil, String.t() | nil) ::
+  @typedoc """
+  What a player shows at the table besides the name (batch 14–15): `card_back` (SH1),
+  `charm` (TB2) and `titles` (XH3, `[%{id, emoji, name}]`). Missing keys keep their value.
+  """
+  @type looks :: %{
+          optional(:card_back) => term(),
+          optional(:charm) => term(),
+          optional(:titles) => list()
+        }
+
+  @no_looks %{card_back: nil, charm: nil, titles: []}
+
+  @spec join(t(), player_id(), String.t(), String.t() | nil, looks()) ::
           {:ok, t(), seat(), [event()]} | {:error, atom()}
-  def join(room, player_id, name, avatar \\ nil, card_back \\ nil) do
+  def join(room, player_id, name, avatar \\ nil, looks \\ %{}) do
+    looks = Map.take(looks, Map.keys(@no_looks))
+
     case seat_of(room, player_id) do
       nil ->
         cond do
           MapSet.member?(room.banned, player_id) -> {:error, :kicked}
           room.status == :playing -> {:error, :game_in_progress}
           map_size(room.seats) >= @max_seats -> {:error, :room_full}
-          true -> seat_new_player(room, player_id, name, avatar, card_back)
+          true -> seat_new_player(room, player_id, name, avatar, looks)
         end
 
       seat ->
@@ -176,28 +207,22 @@ defmodule TienLen.Room do
           update_player(
             room,
             seat,
-            &Map.merge(&1, %{
-              connected: true,
-              avatar: avatar || Map.get(&1, :avatar),
-              card_back: card_back || Map.get(&1, :card_back)
-            })
+            &(&1
+              |> Map.merge(%{connected: true, avatar: avatar || Map.get(&1, :avatar)})
+              |> Map.merge(looks))
           )
 
         {:ok, room, seat, [{:connected, seat}]}
     end
   end
 
-  defp seat_new_player(room, player_id, name, avatar, card_back) do
+  defp seat_new_player(room, player_id, name, avatar, looks) do
     seat = Enum.find(0..(@max_seats - 1), &(not Map.has_key?(room.seats, &1)))
 
-    player = %{
-      player_id: player_id,
-      name: name,
-      connected: true,
-      avatar: avatar,
-      # SH1: the equipped card back, shown to everyone on this seat's pile
-      card_back: card_back
-    }
+    player =
+      %{player_id: player_id, name: name, connected: true, avatar: avatar}
+      |> Map.merge(@no_looks)
+      |> Map.merge(looks)
 
     room = %{room | seats: Map.put(room.seats, seat, player), host: room.host || seat}
     {:ok, room, seat, [{:joined, seat}]}
@@ -314,7 +339,8 @@ defmodule TienLen.Room do
           game: game,
           game_players: game_players,
           game_no: room.game_no + 1,
-          game_chops: %{}
+          game_chops: %{},
+          game_tally: %{}
       }
 
       events =
@@ -342,7 +368,8 @@ defmodule TienLen.Room do
       room = %{
         room
         | game: game,
-          game_chops: count_chops(room.game_chops, room.game.centre, events)
+          game_chops: count_chops(room.game_chops, room.game.centre, events),
+          game_tally: tally(room.game_tally, events)
       }
 
       maybe_finish(room, events)
@@ -377,6 +404,25 @@ defmodule TienLen.Room do
     end)
   end
 
+  # XH2: moves of each seat (a timeout also counts as the pass / play it caused)
+  defp tally(tally, events) do
+    Enum.reduce(events, tally, fn
+      {t, seat, _combo}, acc when t in [:played, :chopped] -> bump(acc, seat, :plays)
+      {:passed, seat}, acc -> bump(acc, seat, :passes)
+      {:timed_out, seat}, acc -> bump(acc, seat, :timeouts)
+      _event, acc -> acc
+    end)
+  end
+
+  defp bump(tally, seat, key) do
+    Map.update(
+      tally,
+      seat,
+      Map.put(%{passes: 0, plays: 0, timeouts: 0}, key, 1),
+      &Map.update!(&1, key, fn n -> n + 1 end)
+    )
+  end
+
   defp run(game, seat, {:play, cards}), do: Game.play(game, seat, cards)
   defp run(game, seat, :pass), do: Game.pass(game, seat)
   defp run(game, seat, {:chop, cards}), do: Game.chop_out_of_turn(game, seat, cards)
@@ -386,7 +432,7 @@ defmodule TienLen.Room do
   @spec turn_timeout(t()) :: result()
   def turn_timeout(%__MODULE__{status: :playing, game: game} = room) do
     with {:ok, game, events} <- Game.timeout(game, game.current) do
-      maybe_finish(%{room | game: game}, events)
+      maybe_finish(%{room | game: game, game_tally: tally(room.game_tally, events)}, events)
     end
   end
 
@@ -415,11 +461,22 @@ defmodule TienLen.Room do
   def result(_room), do: nil
 
   defp record(room, game) do
+    loser = last_holder(game)
+
     players =
       for {group, place} <- Enum.with_index(game.ranking, 1),
           seat <- group,
           Map.has_key?(room.game_players, seat) do
+        tally = Map.get(room.game_tally, seat, %{passes: 0, plays: 0, timeouts: 0})
+        hand = if seat == loser, do: game.hands[seat], else: []
+
         %{
+          # XH2
+          thoi: Enum.count(hand, &(&1.rank == 15)),
+          cong: seat == loser and length(hand) == 13,
+          passes: tally.passes,
+          plays: tally.plays,
+          timeouts: tally.timeouts,
           user_id: room.game_players[seat],
           seat: seat,
           place: place,
@@ -438,6 +495,30 @@ defmodule TienLen.Room do
       players: players
     }
   end
+
+  @doc """
+  The player still holding cards at a normal game over (the one who may pay thối heo, or be
+  cóng), or `nil`: after an instant win, or when that player ranks 1st because all the others
+  were removed (like `TienLen.Payout.thoi/2`).
+  """
+  @spec last_holder(Game.t()) :: seat() | nil
+  def last_holder(%Game{phase: :finished} = game) do
+    ranked = Enum.map(game.ranking || [], &hd/1)
+
+    cond do
+      Game.instant_win?(game) ->
+        nil
+
+      true ->
+        case Enum.find_index(ranked, &(&1 not in game.finished and &1 not in game.removed)) do
+          nil -> nil
+          0 -> nil
+          i -> Enum.at(ranked, i)
+        end
+    end
+  end
+
+  def last_holder(_game), do: nil
 
   @doc "The seat whose turn it is, or `nil`."
   @spec current_seat(t()) :: seat() | nil
@@ -469,7 +550,9 @@ defmodule TienLen.Room do
             host: seat == room.host,
             bot: Map.get(p, :bot),
             avatar: Map.get(p, :avatar),
-            card_back: Map.get(p, :card_back)
+            card_back: Map.get(p, :card_back),
+            charm: Map.get(p, :charm),
+            titles: Map.get(p, :titles, [])
           }
         end),
       game: room.game && Game.view(room.game, me)

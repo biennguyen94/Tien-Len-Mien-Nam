@@ -415,6 +415,20 @@ defmodule TienLen.Admin do
     end
   end
 
+  @doc "Starts or stops a seasonal event (EV1): `\"tet\"`, `\"trung_thu\"` or `\"none\"`."
+  def set_event(admin_id, event) do
+    with {:ok, admin} <- authorize(admin_id),
+         :ok <-
+           if(event in ["none" | TienLen.Events.kinds()], do: :ok, else: {:error, :unknown_event}) do
+      if event == "none",
+        do: Settings.delete("season_event"),
+        else: Settings.put("season_event", event)
+
+      audit(admin.id, "set_event", nil, %{event: event})
+      :ok
+    end
+  end
+
   # -- helpers ----------------------------------------------------------------------
 
   defp fetch(id) do

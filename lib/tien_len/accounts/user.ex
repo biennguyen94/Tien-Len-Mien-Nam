@@ -30,6 +30,8 @@ defmodule TienLen.Accounts.User do
     # SH3: equipped shop items (nil = the free default), set only by TienLen.Shop
     field :card_back, :string
     field :table_theme, :string
+    # TB2: the worn charm (nil = none), set only by TienLen.Shop
+    field :charm, :string
 
     timestamps type: :utc_datetime
   end

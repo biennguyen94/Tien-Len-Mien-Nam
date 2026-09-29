@@ -168,6 +168,15 @@ defmodule TienLenWeb.Layouts do
       📢 {@announcement}
     </div>
 
+    <%!-- EV1: the seasonal event banner (read at render; shown after the next page load) --%>
+    <div
+      :if={TienLen.Events.label(TienLen.Events.current())}
+      id="event-banner"
+      class="alert alert-warning rounded-none justify-center text-center"
+    >
+      {elem(TienLen.Events.label(TienLen.Events.current()), 1)}
+    </div>
+
     <%!-- M3: bottom padding on phones so the 💬 button never covers the last inputs --%>
     <main class="px-3 pt-6 pb-24 sm:px-6 sm:pb-6 lg:px-8">
       <div class={["mx-auto space-y-4", if(@wide, do: "max-w-5xl", else: "max-w-2xl")]}>

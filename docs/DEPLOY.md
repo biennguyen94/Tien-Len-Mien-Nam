@@ -1,6 +1,6 @@
 # Deployment (Docker on WSL, decisions O5 and A4)
 
-Status: deployed 2026-09-28 on the WSL Docker host with its own PostgreSQL (Phase 14). The first deploy without a database was on 2026-09-27 (Phase 10).
+Status: deployed 2026-09-28 on the WSL Docker host with its own PostgreSQL (Phase 14). The first deploy without a database was on 2026-09-27 (Phase 10). Public deploy on 2026-09-29: VM `openmu-server` (34.177.90.124) at **https://tienlenmn.duckdns.org**, behind Caddy (see [Public VPS](#public-vps-tienlenmnduckdnsorg)).
 
 ## Topology
 
@@ -40,7 +40,7 @@ Docker host (WSL2)
 | `PHX_HOST` | `localhost` | Public host name / IP (absolute URLs) |
 | `PHX_URL_SCHEME` | `http` | `https` behind a TLS proxy |
 | `PHX_URL_PORT` | `4020` | Public port in absolute URLs (`443` behind a TLS proxy) |
-| `PHX_FORCE_SSL` | off | `true` only behind HTTPS (needs `X-Forwarded-Proto`) |
+| `PHX_FORCE_SSL` | off | Not needed: `force_ssl` is compiled in from `prod.exs`. It only repeats the value at runtime and crashes the boot if the two differ (see [HTTPS / VPS](#https--vps)). |
 | `MAX_ROOMS` | `500` | Cap on open rooms (spam guard). Admins can override it on "Cài đặt" (stored in the database). |
 | `THROTTLE_BY_IP` | `true` | Also count failed logins per client IP (F8). Set to `false` on this WSL deploy: behind Docker every client has the gateway IP, so one counter would lock out everyone. Counting per username is always on. |
 | `WEB_PORT` | `4020` | Host port (compose variable) |
@@ -101,11 +101,130 @@ docker compose ps                                                               
 ## HTTPS / VPS
 
 - On a VPS, set `PHX_HOST` (and `WEB_PORT`).
-- Behind an HTTPS reverse proxy, also set `PHX_URL_SCHEME=https`, `PHX_URL_PORT=443` and `PHX_FORCE_SSL=true`.
-- The proxy must forward websockets (`/live/websocket`).
+- Behind an HTTPS reverse proxy, also set `PHX_URL_SCHEME=https` and `PHX_URL_PORT=443`.
+- The proxy must forward websockets (`/live/websocket`) and send `X-Forwarded-Proto`.
 - Do not publish the database port.
 
+**`force_ssl` is compile-time.** `config/prod.exs` turns it on when the image is built: HTTP → HTTPS redirect and HSTS, except for `localhost`/`127.0.0.1`. So a public prod deploy **needs** a TLS proxy; plain `http://<ip>:4020` redirects to an HTTPS address without a certificate.
+
+- Do not edit or comment out `force_ssl` in `prod.exs`.
+- `PHX_FORCE_SSL=true` only sets the same value again at runtime. If it differs from the compiled value, the release refuses to boot and restarts in a loop:
+  `the application :tien_len has a different value set for path [:force_ssl] inside key TienLenWeb.Endpoint during runtime compared to compile time`.
+  Fix: `git checkout config/prod.exs`, then `docker compose up -d --build`.
+
+## Public VPS (tienlenmn.duckdns.org)
+
+Set up 2026-09-29 and confirmed working.
+
+```text
+VM openmu-server (34.177.90.124), firewall: tcp 80 + 443 only
+└── compose project `tien-len` (docker-compose.yml + docker-compose.caddy.yml)
+    ├── tien-len-caddy  caddy:2, host 80/443 (+443/udp), Let's Encrypt certificate
+    │                   in volume `caddy-data` → reverse_proxy tien-len:4000
+    ├── tien-len        NOT published on the host (only Caddy reaches it)
+    └── tien-len-db     not published
+```
+
+### 1. DNS
+
+```bash
+curl "https://www.duckdns.org/update?domains=tienlenmn&token=<TOKEN>&ip=34.177.90.124"
+dig +short tienlenmn.duckdns.org      # 34.177.90.124
+```
+
+Keep the VM IP static (reserve it on the cloud provider), otherwise it changes on stop/start and DuckDNS must be updated.
+
+### 2. `deploy/.env` on the VM
+
+```ini
+SECRET_KEY_BASE=<mix phx.gen.secret>
+POSTGRES_PASSWORD=<openssl rand -hex 24>
+PHX_HOST=tienlenmn.duckdns.org
+PHX_URL_SCHEME=https
+PHX_URL_PORT=443
+THROTTLE_BY_IP=false
+MAX_ROOMS=500
+# compose merges both files, no -f needed
+COMPOSE_FILE=docker-compose.yml:docker-compose.caddy.yml
+```
+
+`THROTTLE_BY_IP` stays `false`: the app reads `conn.remote_ip` and does not parse `X-Forwarded-For`, so every player has Caddy's IP.
+
+### 3. Caddy files (only on the VM, next to `docker-compose.yml`)
+
+`deploy/Caddyfile` (indent with a tab):
+
+```
+tienlenmn.duckdns.org {
+	encode zstd gzip
+	reverse_proxy tien-len:4000
+}
+```
+
+The port is **4000** (inside the Docker network), not 4020 (host port). With 4020, Caddy logs `connect: connection refused` and serves 502.
+
+`deploy/docker-compose.caddy.yml`:
+
+```yaml
+services:
+  tien-len:
+    ports: !reset []          # compose >= 2.24
+
+  caddy:
+    image: caddy:2
+    container_name: tien-len-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data        # keeps the certificate across redeploys
+      - caddy-config:/config
+    depends_on:
+      - tien-len
+
+volumes:
+  caddy-data:
+  caddy-config:
+```
+
+Caddy redirects HTTP → HTTPS, forwards websockets and sends `X-Forwarded-Proto`, which `force_ssl` needs (`rewrite_on: [:x_forwarded_proto]`).
+
+### 4. Deploy and check
+
+```bash
+cd ~/Tien-Len-Mien-Nam
+git status --short config/            # must be empty (see force_ssl above)
+cd deploy
+docker compose up -d --build
+docker compose logs -f caddy          # wait for "certificate obtained successfully"
+docker compose ps                     # tien-len Up (not Restarting), db healthy, caddy Up
+
+curl -s -o /dev/null -w '%{http_code}\n' https://tienlenmn.duckdns.org/   # 200
+curl -sI https://tienlenmn.duckdns.org/ | grep -i strict                 # HSTS header
+```
+
+### Troubleshooting
+
+| Caddy log / symptom | Cause |
+|---|---|
+| `dial tcp …:4020: connect: connection refused` | Caddyfile points to 4020; use `tien-len:4000` |
+| `lookup tien-len on 127.0.0.11:53: server misbehaving` | the `tien-len` container is not running; see `docker compose logs --tail=80 tien-len` |
+| `tien-len` in `Restarting (1)`, log mentions `[:force_ssl]` | `prod.exs` changed on the VM; see `force_ssl` above |
+
+The other commands (logs, backup, admin `promote`) are the same as on WSL. The VM database is separate from the WSL one: accounts and the admin must be created there again.
+
 ## Verification
+
+### Public VPS (2026-09-29), tienlenmn.duckdns.org
+
+- Caddy got the Let's Encrypt certificate (http-01) on the first start.
+- Two problems fixed on the way:
+  - the Caddyfile pointed to port 4020 → 502;
+  - `force_ssl` was commented out in the VM's `prod.exs`, so the release crash-looped. Restored with `git checkout config/prod.exs` and rebuilt.
+- After the fix, the owner confirmed the site works at https://tienlenmn.duckdns.org.
 
 ### Phase 40 (2026-09-28), cards in hand
 
@@ -184,4 +303,4 @@ docker compose ps                                                               
 ### NOT VERIFIED
 
 - Registration through the browser form against the container (LiveView over a real websocket). It is covered by LiveView tests and by `rpc`, not by a browser.
-- HTTPS / reverse proxy setup.
+- HTTPS behind Caddy: confirmed working by the owner, but not every step of the smoke test above was recorded (HSTS header, websocket over `wss://`, `Endpoint.url()`).

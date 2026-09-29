@@ -54,7 +54,8 @@ defmodule TienLenWeb.AdminComponents do
     "announce" => "Thông báo",
     "mute" => "Cấm chat",
     "unmute" => "Bỏ cấm chat",
-    "delete_message" => "Xóa tin nhắn"
+    "delete_message" => "Xóa tin nhắn",
+    "set_event" => "Đổi sự kiện theo mùa"
   }
 
   def action_label(action), do: Map.get(@actions, action, action)

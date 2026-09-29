@@ -109,9 +109,9 @@ defmodule TienLen.RoomServer do
     end
   end
 
-  @doc "Seats (or reconnects) `player_id` and monitors the calling process."
-  def join(room_id, player_id, name, avatar \\ nil, card_back \\ nil),
-    do: call(room_id, {:join, player_id, name, avatar, card_back})
+  @doc "Seats (or reconnects) `player_id` and monitors the calling process. `looks`: see `TienLen.Room.join/5`."
+  def join(room_id, player_id, name, avatar \\ nil, looks \\ %{}),
+    do: call(room_id, {:join, player_id, name, avatar, looks})
 
   @doc "A seated player shows an emoji on their seat (R1); broadcasts `{:reaction, room_id, seat, emoji}`."
   def react(room_id, player_id, emoji), do: call(room_id, {:react, player_id, emoji})
@@ -123,6 +123,13 @@ defmodule TienLen.RoomServer do
   """
   def throw(room_id, player_id, to_seat, item_id),
     do: call(room_id, {:throw, player_id, to_seat, item_id})
+
+  @doc """
+  TB1: a seated player blows on the cards while waiting for a game; everyone sees a puff.
+  Once per 3 s. It changes nothing (TB3): the next deal is the usual shuffle.
+  Broadcasts `{:blow, room_id, seat}`.
+  """
+  def blow(room_id, player_id), do: call(room_id, {:blow, player_id})
 
   def leave(room_id, player_id), do: call(room_id, {:leave, player_id})
   def start_game(room_id, player_id), do: call(room_id, {:start_game, player_id})
@@ -248,6 +255,8 @@ defmodule TienLen.RoomServer do
          Keyword.get_lazy(opts, :bot_delay, fn ->
            Application.get_env(:tien_len, :bot_delay, 1_000)
          end),
+       # BP3: random source of the bots' lines (fixed in tests)
+       talk_rng: Keyword.get_lazy(opts, :talk_rng, &TienLen.BotTalk.random/0),
        # player_id => timer ref
        disconnect_timers: %{},
        # monitored pid => {player_id, monitor ref}
@@ -263,13 +272,14 @@ defmodule TienLen.RoomServer do
 
   @impl true
   def handle_call({:join, player_id, name}, from, state),
-    do: handle_call({:join, player_id, name, nil, nil}, from, state)
+    do: handle_call({:join, player_id, name, nil, %{}}, from, state)
 
   def handle_call({:join, player_id, name, avatar}, from, state),
-    do: handle_call({:join, player_id, name, avatar, nil}, from, state)
+    do: handle_call({:join, player_id, name, avatar, %{}}, from, state)
 
-  def handle_call({:join, player_id, name, avatar, card_back}, {pid, _tag}, state) do
-    case Room.join(state.room, player_id, name, avatar, card_back) do
+  def handle_call({:join, player_id, name, avatar, looks}, {pid, _tag}, state)
+      when is_map(looks) do
+    case Room.join(state.room, player_id, name, avatar, looks) do
       {:ok, room, seat, events} ->
         state = state |> track(pid, player_id) |> cancel_disconnect_timer(player_id)
         {:reply, {:ok, seat}, changed(state, room, events)}
@@ -402,6 +412,20 @@ defmodule TienLen.RoomServer do
 
       {:reply, :ok, state}
     else
+      error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:blow, player_id}, _from, state) do
+    seat = Room.seat_of(state.room, player_id)
+
+    with :ok <- if(seat, do: :ok, else: {:error, :not_in_room}),
+         :ok <- if(state.room.status == :waiting, do: :ok, else: {:error, :game_in_progress}),
+         :ok <- TienLen.RateLimit.hit({:blow, player_id}, 1, 3_000) do
+      Phoenix.PubSub.broadcast(TienLen.PubSub, topic(state.id), {:blow, state.id, seat})
+      {:reply, :ok, state}
+    else
+      {:error, :rate_limited} -> {:reply, {:error, :blow_too_fast}, state}
       error -> {:reply, error, state}
     end
   end
@@ -646,21 +670,30 @@ defmodule TienLen.RoomServer do
       Phoenix.PubSub.broadcast(TienLen.PubSub, TienLen.Lobby.topic(), {:lobby_updated, state.id})
     end
 
-    comment(state, old_room, events)
+    case TienLen.Commentary.effects(old_room, events) do
+      [] ->
+        :ok
+
+      kinds ->
+        Phoenix.PubSub.broadcast(TienLen.PubSub, topic(state.id), {:effects, state.id, kinds})
+    end
+
+    state |> comment(old_room, events) |> give_lixi(events) |> bot_talk(old_room, events)
   end
 
-  # BL1: the commentator's lines go to the room chat like any message (no user id)
-  defp comment(state, old_room, events) do
+  # BP3: bots of the room say something (as themselves, with their seat for a speech bubble)
+  defp bot_talk(state, old_room, events) do
     old_room
-    |> TienLen.Commentary.lines(state.room, events)
-    |> Enum.reduce(state, fn text, st ->
+    |> TienLen.BotTalk.lines(state.room, events, state.talk_rng)
+    |> Enum.reduce(state, fn {seat, text}, st ->
       msg = %{
         id: System.unique_integer([:positive, :monotonic]),
         user_id: nil,
-        name: TienLen.Commentary.name(),
+        name: st.room.seats[seat].name,
         text: text,
         at: DateTime.utc_now(:second),
-        system: true
+        bot: true,
+        seat: seat
       }
 
       Phoenix.PubSub.broadcast(TienLen.PubSub, topic(st.id), {:room_chat, st.id, msg})
@@ -668,9 +701,65 @@ defmodule TienLen.RoomServer do
     end)
   rescue
     error ->
+      Logger.error("room #{state.id}: bot talk failed: #{Exception.message(error)}")
+      state
+  end
+
+  # BL1: the commentator's lines go to the room chat like any message (no user id)
+  defp comment(state, old_room, events) do
+    old_room
+    |> TienLen.Commentary.lines(state.room, events)
+    |> Enum.reduce(state, &post_system(&2, &1))
+  rescue
+    error ->
       Logger.error("room #{state.id}: commentary failed: #{Exception.message(error)}")
       state
   end
+
+  defp post_system(state, text) do
+    msg = %{
+      id: System.unique_integer([:positive, :monotonic]),
+      user_id: nil,
+      name: TienLen.Commentary.name(),
+      text: text,
+      at: DateTime.utc_now(:second),
+      system: true
+    }
+
+    Phoenix.PubSub.broadcast(TienLen.PubSub, topic(state.id), {:room_chat, state.id, msg})
+    %{state | chat: Enum.take([msg | state.chat], @chat_keep)}
+  end
+
+  # EV2: during Tết every 1st place of a recorded game gets a lì xì (announced in the chat)
+  defp give_lixi(%{economy: economy, recorder: recorder} = state, events)
+       when economy != nil and recorder != nil do
+    with true <- Enum.any?(events, &match?({:game_over, _}, &1)),
+         "tet" <- TienLen.Events.current(),
+         %{} = result <- Room.result(state.room) do
+      Enum.reduce(result.players, state, fn
+        %{place: 1, user_id: user_id, seat: seat}, st when is_integer(user_id) ->
+          case TienLen.Events.lixi(user_id, result.ref) do
+            {:ok, amount} ->
+              name = (st.room.seats[seat] || %{name: "Người thắng"}).name
+              post_system(st, "🧧 #{name} được lì xì #{amount} coin! Chúc mừng năm mới!")
+
+            _ ->
+              st
+          end
+
+        _player, st ->
+          st
+      end)
+    else
+      _ -> state
+    end
+  rescue
+    error ->
+      Logger.error("room #{state.id}: lì xì failed: #{Exception.message(error)}")
+      state
+  end
+
+  defp give_lixi(state, _events), do: state
 
   # -- coins (T20–T25, E6) ----------------------------------------------------------
 
@@ -893,12 +982,15 @@ defmodule TienLen.RoomServer do
   # After every change: if a bot has something to do, it acts after `bot_delay` ms. A newer
   # change replaces the pending action (its ref goes stale).
   defp schedule_bot(state) do
-    if state.room.status == :playing and bot_command(state.room) do
+    with :playing <- state.room.status,
+         {bot_id, _cmd} <- bot_command(state.room) do
       ref = make_ref()
-      Process.send_after(self(), {:bot_act, ref}, state.bot_delay)
+      # BP2: the personality sets the speed
+      factor = TienLen.BotTalk.speed(state.room, Room.seat_of(state.room, bot_id))
+      Process.send_after(self(), {:bot_act, ref}, round(state.bot_delay * factor))
       %{state | bot_ref: ref}
     else
-      %{state | bot_ref: nil}
+      _ -> %{state | bot_ref: nil}
     end
   end
 

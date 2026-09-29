@@ -29,7 +29,8 @@ defmodule TienLenWeb.ChatComponents do
           <span class={[
             "font-semibold shrink-0",
             m.user_id && m.user_id == @me && "text-primary",
-            Map.get(m, :system) && "text-warning"
+            Map.get(m, :system) && "text-warning",
+            Map.get(m, :bot) && "text-info"
           ]}>
             {m.name}:
           </span>

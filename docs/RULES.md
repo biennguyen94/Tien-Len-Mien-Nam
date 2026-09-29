@@ -266,14 +266,16 @@ Coins are virtual and only exist inside the game (C1). **All amounts are compute
 - **Weekly season**: Monday 00:00 to Sunday 24:00 Vietnam time, ranked by 1st places in that week's recorded games (ties as in the leaderboard). The top 3 with at least one win get 1,000 / 500 / 300 coins after the week ends.
 - Games with bots are not recorded, so they count for neither. All amounts are admin settings.
 
-## 17c. Spending coins and fun extras (TH1–TH4, BL1–BL3, RC1, SH1–SH3)
+## 17c. Spending coins and fun extras (TH1–TH4, BL1–BL3, RC1, SH1–SH3, TB1–TB3, EV1–EV3)
 
 | # | Rule |
 |---|---|
-| T26 | **Spending** (the only way coins leave the game): throwing an item at another seat (🍅 1, 🥚 2, 🩴 3, 🌹 5 coins, 3 s cooldown) and buying a card back or table theme in the shop (once per item, kept forever). The server checks the balance and spends in one transaction; a balance never goes negative. Nothing bought or thrown changes a game. |
+| T26 | **Spending** (the only way coins leave the game): throwing an item at another seat (🍅 1, 🥚 2, 🩴 3, 🌹 5 coins, 3 s cooldown) and buying a card back, table theme or charm in the shop (once per item, kept forever). The server checks the balance and spends in one transaction; a balance never goes negative. Nothing bought or thrown changes a game. |
 
 - The **commentator** posts lines in the room chat from public events; at game over it may tell how many 2s the thối heo loser held (BL2).
 - Leaving during a game still removes the player from it (§12); nobody plays in their place (RC1).
+- **Blowing on the cards and charms have no effect on anything** (TB3): every deal is the same server shuffle (§2). Bot personalities change only their lines and speed, never how they choose cards (BP1–BP3).
+- **Seasonal event Tết** (EV2): each 1st place of a recorded game gets a random lì xì (8–168 coins, at most 10 per player per Vietnam day). This is a grant like missions; it moves no coin between players.
 
 ## 18. Rule ↔ decision map
 

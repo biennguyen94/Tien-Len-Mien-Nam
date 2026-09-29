@@ -63,7 +63,12 @@ defmodule TienLen.Stats do
               game_id: game.id,
               chops: Map.get(&1, :chops, 0),
               coins: Map.get(&1, :coins, 0),
-              instant: Map.get(&1, :instant, false)
+              instant: Map.get(&1, :instant, false),
+              thoi: Map.get(&1, :thoi, 0),
+              cong: Map.get(&1, :cong, false),
+              passes: Map.get(&1, :passes, 0),
+              plays: Map.get(&1, :plays, 0),
+              timeouts: Map.get(&1, :timeouts, 0)
             })
           )
         )

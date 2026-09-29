@@ -270,3 +270,23 @@ Tien-Len-Mien-Nam/
 ## Phase 44 — Shop: card backs and table themes (SH1–SH3) — DONE (2026-09-29)
 
 - [x] `TienLen.Shop`, `user_items`, `/cua-hang`, card backs at the table, table themes; audit 87/87 OK.
+
+## Phase 45 — Sounds and effects (SF1–SF2) — DONE (2026-09-29)
+
+- [x] `Commentary.effects/2`, `{:effects, …}`, `Sfx` hook (Web Audio, shake, confetti), tick, mute in `localStorage`.
+
+## Phase 46 — Shame titles of the week (XH1–XH4) — DONE (2026-09-29)
+
+- [x] Per-player facts, `TienLen.Shame`, titles at the table and on the profile, `/tuong-xau-ho`.
+
+## Phase 47 — Bot personalities (BP1–BP4) — DONE (2026-09-29)
+
+- [x] `TienLen.BotTalk`, personalities on `add_bot`, speed, lines and speech bubbles.
+
+## Phase 48 — Blowing on the cards, charms (TB1–TB3) — DONE (2026-09-29)
+
+- [x] `RoomServer.blow/2`, puffs; charms in the shop, next to the avatar.
+
+## Phase 49 — Seasonal events (EV1–EV3) — DONE (2026-09-29)
+
+- [x] `season_event` setting, admin select, banner, lì xì at Tết, lanterns at Trung thu.

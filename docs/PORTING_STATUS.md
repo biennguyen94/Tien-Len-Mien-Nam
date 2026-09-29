@@ -48,6 +48,11 @@ Last updated: 2026-09-29
 | 42 | Commentator | **DONE** (2026-09-29) |
 | 43 | Runaway line and slipper | **DONE** (2026-09-29) |
 | 44 | Shop: card backs and table themes | **DONE** (2026-09-29) |
+| 45 | Sounds and effects | **DONE** (2026-09-29) |
+| 46 | Shame titles of the week | **DONE** (2026-09-29) |
+| 47 | Bot personalities | **DONE** (2026-09-29) |
+| 48 | Blowing on the cards, charms | **DONE** (2026-09-29) |
+| 49 | Seasonal events (Tết, Trung thu) | **DONE** (2026-09-29) |
 
 Current architecture (modules, processes, database, routes, visibility): `ARCHITECTURE.md` Part 2. What was delivered and verified in each phase: the results sections below.
 
@@ -327,6 +332,27 @@ The owner picked #1 (ném đồ), #2 (bình luận viên), #6 (câu bỏ chạy)
 | SH1 | **Shop** `/cua-hang`: **card backs** (seen by everyone on your card pile at the table and by spectators) and **table themes** (the centre felt, seen only by you). 9 of each, one free default each, the rest 400–1,500 coins. Items are bought once and kept forever; equipping is free. |
 | SH2 | A purchase is one database transaction: the balance is locked and checked, the coins are spent (ledger reason `shop`, ref = item id) and the item is added (`user_items`, unique per user and item, so it is never paid twice). No refunds, no gifts, no selling. |
 | SH3 | Catalogue and prices are in code (`TienLen.Shop`); the looks are CSS only (no images). The equipped back and theme are stored on the user (`users.card_back`, `users.table_theme`); the back is taken into the room when joining or reconnecting. |
+
+### Batch 15 — sounds, shame titles, bot personalities, blowing and charms, seasonal events (2026-09-29)
+
+The owner picked #3, #4, #5, #7 and #9 and asked to implement them "cu thay hop li la dc", without being asked. The details below were **taken by Claude** and can be overridden.
+
+| # | Decision |
+|---|---|
+| SF1 | **Sounds and effects**, made in the browser (Web Audio, no sound files) from **effect kinds decided by the server** from public events: `pig` (a play with a 2: "éc"), `chop` (a chặt heo / chặt chồng: bang + the table shakes), `confetti` (tới trắng: paper confetti + fanfare), `tick` (my own turn, last 5 s). Players and spectators get them (tick only for the player whose turn it is). |
+| SF2 | One 🔊 / 🔇 button on the table and watch pages; the choice is kept in the browser (`localStorage`, per device), default on. Sounds start after the first tap on the page (browser rule). "Reduce motion" turns off the shake and the confetti. |
+| XH1 | **Shame titles of the week** (Monday–Sunday, Vietnam time, recorded games only, so never games with bots):<br>• 🐷 **Vua Thối Heo**: most 2s held at thối heo;<br>• 🥶 **Chúa Tể Cóng**: most games cóng;<br>• 🙈 **Thánh Bỏ Lượt**: highest share of passes among own moves (at least 30 moves that week);<br>• 🔪 **Đồ Tể**: most chặt heo;<br>• 🐢 **Rùa Thần**: most turn timeouts.<br>A holder needs at least one occurrence. Ties: fewer games first (worse per game), then the earlier account. |
+| XH2 | Each recorded player now also stores `thoi` (number of 2s held when paying thối heo), `cong`, `passes`, `plays` (plays and chops), `timeouts`. **Games recorded before this change count 0.** |
+| XH3 | Titles show under the name at the table (emoji, name on hover) and on the profile; page **"Tường xấu hổ"** `/tuong-xau-ho` (linked from the leaderboard) lists the top 3 of each title for this week and last week. No coins are attached. Titles are read when joining a room (cached 60 s). |
+| BP1 | **Bot personalities**: each added bot gets the first free one of 👵 **Bà Tám**, 👴 **Ông Cụ Non**, 😤 **Thanh Niên Nóng Tính**; its name is "Bà Tám (dễ)" etc. The level (dễ / thường) still decides how it plays. |
+| BP2 | Speed: Bà Tám 1×, Ông Cụ Non 2.5×, Nóng Tính 0.5× the bot delay (1 s), always far below the turn timer. |
+| BP3 | Lines in the room chat as the bot (plus a 3 s speech bubble on its seat), from **public facts only** (never from its hand): game start, own play (sometimes), chopping, being chopped, finishing 1st or last, another player's chop. At most one line per bot per change. |
+| TB1 | **"Thổi bài"** 🌬️: while waiting for a game, a seated player blows on the cards; everyone sees a puff on that seat for 2 s. At most once per 3 s, free. |
+| TB2 | **Charms** (bùa may mắn): a third shop kind, worn next to the avatar at the table and on the profile: 🧄 Tỏi trừ tà 200, 🧿 Mắt xanh 300, 🍀 Cỏ bốn lá 300, 🐸 Cóc ngậm tiền 500, 🐈 Mèo thần tài 500, 📿 Tràng hạt 600, 🪬 Bàn tay Hamsa 800. Default none; taking it off is free. |
+| TB3 | **Blowing and charms change nothing**: the deal is the same shuffle as always. Stated in RULES; the guide jokes "hiệu quả tâm lý 100%". |
+| EV1 | **Seasonal event**, chosen by an admin on "Cài đặt" (audited): none (default), **Tết** or **Trung thu**. A banner on every page while it runs. No automatic calendar. |
+| EV2 | **Tết**: every 1st place of a recorded game gets a random **lì xì** of 8, 18, 28, 38, 58, 68, 88 or 168 coins (small amounts more likely), at most **10 per player per Vietnam day**, ledger reason `lixi`, idempotent per game and player; the commentator announces it. |
+| EV3 | **Trung thu**: every avatar wears a 🏮. |
 
 ### Project decisions
 
@@ -1325,6 +1351,32 @@ On a narrowed laptop window the same happened below 640 px. Between 640 and ~900
   - a 🍅 costs 1 coin in the header, flies and leaves its mark;
   - bought themes: Tết felt for its owner, default felt and the owner's card back for a spectator.
 - Emoji show as boxes in headless Chromium (no emoji font); layout checked, real-browser look NOT VERIFIED.
+
+## Phases 45–49 results — sounds, shame titles, bot personalities, blowing and charms, events (2026-09-29)
+
+### Delivered
+
+- **Sounds and effects (45, SF1–SF2)**: `Commentary.effects/2` (pure) → `{:effects, id, kinds}` on the room topic → `push_event("sfx")`; the `Sfx` hook on the 🔊 button synthesises "éc éc", a bang, a fanfare and a tick with Web Audio, shakes `[data-shake]` and drops confetti; the tick is pushed by the table's 1 s timer in the last 5 s of my own turn. Muting in `localStorage` (`tl-muted`).
+- **Shame titles (46, XH1–XH4)**: `Room` counts passes / plays / timeouts per seat (`game_tally`), `Room.result/1` adds `thoi`, `cong`, `passes`, `plays`, `timeouts` (new `game_players` columns); `Room.last_holder/1` is shared with the commentator. `TienLen.Shame` (week query, ranking, `titles_of/1` cached 60 s); titles under the name at the table, on the profile, page `/tuong-xau-ho` (this week / last week), link from the leaderboard.
+- **Bot personalities (47, BP1–BP4)**: `TienLen.BotTalk` (pure: 3 personalities, lines per trigger with chances, speed); `Room.add_bot/3` gives the first free personality; the room delays each bot by its speed, posts its lines as chat (`bot: true, seat`) and the table shows a speech bubble under the seat for 3.5 s. Room option `talk_rng` for tests.
+- **Blowing and charms (48, TB1–TB3)**: `RoomServer.blow/2` (waiting only, 3 s) → `{:blow, id, seat}` → a 😮‍💨💨 puff on the seat (players and spectators). Charms as a third shop kind (7 items), `users.charm`, `Shop.remove_charm/1`, shown next to the avatar at the table, for spectators and on the profile. The `looks` map (`card_back`, `charm`, `titles`) replaces the card-back argument of `Room.join/5`.
+- **Seasonal events (49, EV1–EV3)**: setting `season_event`, `Admin.set_event/2` (audited "Đổi sự kiện theo mùa"), a select on "Cài đặt", `TienLen.Events` (weighted lì xì draw, daily cap 10, `Economy.grant/5`), the room grants lì xì to 1st places of recorded games at game over and announces it; banner on every page; `Text.avatar/1` adds 🏮 during Trung thu.
+- Also fixed: `invites_test` could fail when the random deal was an instant win (game over at once); it now uses a fixed deal.
+
+### VERIFIED
+
+- `mix precommit`: **449 passed** (15 new tests in `fun_extras_2_test.exs` and `fun_extras_2_live_test.exs`, repeated 3 times; the whole suite twice). They cover:
+  - effect kinds;
+  - per-player facts of a game (timeout counted as a pass, thối 2 heo);
+  - titles with the 30-move minimum and the tie rule;
+  - personalities (names, avatars, speed, reuse of a freed one, start and chop lines, a missed roll);
+  - blowing (waiting only, cooldown);
+  - charms (buy, wear, off, into the room);
+  - lì xì (table, idempotency, daily cap, admin start → granted at game over and announced, only to the winner);
+  - lanterns;
+  - the pages: pig sound pushed, puff, bot bubble, charm and title at the table and on the profile, the wall, the event banner.
+- Headless Chromium: `audit.js` **91/91 OK** with `/tuong-xau-ho`. It first found the bot speech bubble overflowing at 360 / 390 px (above the right seat); the bubble now sits under its seat, as wide as the seat, at most 3 lines.
+- NOT VERIFIED: how the sounds actually sound, and the emoji, in a real browser (headless Chromium has no audio output and no emoji font).
 
 ## Environment state
 

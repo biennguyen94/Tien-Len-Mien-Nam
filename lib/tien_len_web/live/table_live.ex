@@ -52,6 +52,10 @@ defmodule TienLenWeb.TableLive do
       # RC1: empty seat => slipper shown until; BL3: {latest commentator line, until}
       |> assign(:runaways, %{})
       |> assign(:ticker, nil)
+      # BP3: bot seat => {line, shown until}
+      |> assign(:speech, %{})
+      # TB1: seat => {puff shown until, n}
+      |> assign(:puffs, %{})
       # SH1: my table theme
       |> assign(:felt, TienLen.Shop.equipped(socket.assigns.current_user, :table))
 
@@ -67,7 +71,7 @@ defmodule TienLenWeb.TableLive do
                socket.assigns.player_id,
                socket.assigns.player_name,
                socket.assigns.current_user.avatar,
-               TienLen.Shop.equipped(socket.assigns.current_user, :card_back)
+               looks(socket.assigns.current_user)
              ) do
           {:ok, _seat} ->
             :timer.send_interval(1_000, :tick)
@@ -84,6 +88,15 @@ defmodule TienLenWeb.TableLive do
             {:ok, socket |> put_flash(:error, Text.reason(reason)) |> push_navigate(to: ~p"/")}
         end
     end
+  end
+
+  # SH1, TB2, XH3: what the others see of me at the table
+  defp looks(user) do
+    %{
+      card_back: TienLen.Shop.equipped(user, :card_back),
+      charm: TienLen.Shop.equipped(user, :charm),
+      titles: TienLen.Shame.titles_of(user.id)
+    }
   end
 
   # -- events -------------------------------------------------------------------
@@ -219,6 +232,14 @@ defmodule TienLenWeb.TableLive do
     end
   end
 
+  # TB1: blow on the cards (changes nothing, TB3)
+  def handle_event("blow", _params, socket) do
+    case RoomServer.blow(socket.assigns.room_id, socket.assigns.player_id) do
+      :ok -> {:noreply, socket}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, Text.reason(reason))}
+    end
+  end
+
   # M2: hand order, by rank (default) or by suit
   def handle_event("sort", _params, socket),
     do:
@@ -267,11 +288,19 @@ defmodule TienLenWeb.TableLive do
     if socket.assigns.view do
       socket = update(socket, :chat, &Enum.take(&1 ++ [msg], -50))
 
-      {:noreply,
-       if(Map.get(msg, :system),
-         do: assign(socket, :ticker, {msg.text, now() + 5_000}),
-         else: socket
-       )}
+      socket =
+        cond do
+          Map.get(msg, :system) ->
+            assign(socket, :ticker, {msg.text, now() + 5_000})
+
+          Map.get(msg, :bot) ->
+            update(socket, :speech, &Map.put(&1, msg.seat, {msg.text, now() + 3_500}))
+
+          true ->
+            socket
+        end
+
+      {:noreply, socket}
     else
       {:noreply, socket}
     end
@@ -300,15 +329,31 @@ defmodule TienLenWeb.TableLive do
   def handle_info({:reaction, _id, seat, emoji}, socket),
     do: {:noreply, update(socket, :reactions, &Map.put(&1, seat, {emoji, now() + 3_000}))}
 
+  def handle_info({:blow, _id, seat}, socket),
+    do:
+      {:noreply,
+       update(
+         socket,
+         :puffs,
+         &Map.put(&1, seat, {now() + 2_000, System.unique_integer([:positive])})
+       )}
+
+  # SF1: sound / visual effects decided by the room from public events
+  def handle_info({:effects, _id, kinds}, socket),
+    do: {:noreply, push_event(socket, "sfx", %{kinds: kinds})}
+
   def handle_info(:tick, socket) do
     t = now()
 
     {:noreply,
      socket
      |> assign(:now, t)
+     |> tick_sound()
      |> update(:reactions, fn r -> Map.reject(r, fn {_seat, {_e, until}} -> until <= t end) end)
      |> update(:marks, fn m -> Map.reject(m, fn {_seat, {_i, until, _n}} -> until <= t end) end)
      |> update(:runaways, fn r -> Map.reject(r, fn {_seat, until} -> until <= t end) end)
+     |> update(:speech, fn r -> Map.reject(r, fn {_seat, {_l, until}} -> until <= t end) end)
+     |> update(:puffs, fn r -> Map.reject(r, fn {_seat, {until, _n}} -> until <= t end) end)
      |> update(:ticker, fn
        {_text, until} when until <= t -> nil
        ticker -> ticker
@@ -316,6 +361,16 @@ defmodule TienLenWeb.TableLive do
   end
 
   def handle_info(_unexpected, socket), do: {:noreply, socket}
+
+  # SF1: "tích tắc" in the last 5 seconds of my own turn
+  defp tick_sound(%{assigns: %{view: %{status: :playing, me: me, game: %{current: me}}}} = socket) do
+    case seconds_left(socket.assigns) do
+      secs when is_integer(secs) and secs in 1..5 -> push_event(socket, "sfx", %{kinds: ["tick"]})
+      _ -> socket
+    end
+  end
+
+  defp tick_sound(socket), do: socket
 
   # RC1: a player who left the room during a game (removed and left in one change)
   defp note_runaways(socket, events) do
@@ -478,6 +533,15 @@ defmodule TienLenWeb.TableLive do
             👀 {@view.spectators}
           </span>
           <button
+            id="sound-toggle"
+            phx-hook="Sfx"
+            phx-update="ignore"
+            class="btn btn-ghost btn-sm"
+            title="Âm thanh"
+          >
+            🔊
+          </button>
+          <button
             id="copy-link"
             phx-hook="CopyLink"
             data-url={url(~p"/phong/#{@room_id}")}
@@ -501,6 +565,7 @@ defmodule TienLenWeb.TableLive do
       <div
         id="table"
         phx-hook="Throws"
+        data-shake
         class="grid grid-cols-3 sm:grid-rows-[auto_1fr_auto] gap-2 sm:gap-3 items-center"
       >
         <div class="col-start-2 row-start-1 min-w-0 sm:justify-self-center">
@@ -513,6 +578,8 @@ defmodule TienLenWeb.TableLive do
             marks={@marks}
             runaways={@runaways}
             throw_menu={@throw_menu}
+            speech={@speech}
+            puffs={@puffs}
           />
         </div>
         <div class="col-start-1 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-start">
@@ -525,6 +592,8 @@ defmodule TienLenWeb.TableLive do
             marks={@marks}
             runaways={@runaways}
             throw_menu={@throw_menu}
+            speech={@speech}
+            puffs={@puffs}
           />
         </div>
         <div class="col-start-3 row-start-1 sm:row-start-2 min-w-0 sm:justify-self-end">
@@ -537,6 +606,8 @@ defmodule TienLenWeb.TableLive do
             marks={@marks}
             runaways={@runaways}
             throw_menu={@throw_menu}
+            speech={@speech}
+            puffs={@puffs}
           />
         </div>
 
@@ -561,6 +632,8 @@ defmodule TienLenWeb.TableLive do
             marks={@marks}
             runaways={@runaways}
             throw_menu={@throw_menu}
+            speech={@speech}
+            puffs={@puffs}
           />
         </div>
       </div>
@@ -684,7 +757,12 @@ defmodule TienLenWeb.TableLive do
   attr :marks, :map, default: %{}
   attr :runaways, :map, default: %{}
   attr :throw_menu, :integer, default: nil
-  attr :menu_align, :atom, default: :center, doc: "keeps the throw menu inside the screen"
+  attr :speech, :map, default: %{}
+  attr :puffs, :map, default: %{}
+
+  attr :menu_align, :atom,
+    default: :center,
+    doc: "keeps the throw menu inside the screen"
 
   defp seat(assigns) do
     player = player(assigns.view, assigns.seat)
@@ -745,6 +823,21 @@ defmodule TienLenWeb.TableLive do
       </div>
       <div :if={@player} class="relative">
         <span
+          :if={@puffs[@seat]}
+          id={"puff-#{@seat}-#{elem(@puffs[@seat], 1)}"}
+          class="puff absolute left-1/2 -top-8 z-30 text-2xl pointer-events-none"
+          aria-hidden="true"
+        >
+          😮‍💨💨
+        </span>
+        <span
+          :if={@speech[@seat]}
+          id={"speech-#{@seat}"}
+          class="ticker absolute top-full inset-x-0 z-30 mt-2 line-clamp-3 rounded-box bg-base-100 border border-base-300 shadow px-2 py-1 text-xs font-normal"
+        >
+          💬 {elem(@speech[@seat], 0)}
+        </span>
+        <span
           :if={@reactions[@seat]}
           id={"reaction-#{@seat}"}
           class="absolute -top-6 left-1/2 -translate-x-1/2 text-3xl animate-bounce"
@@ -753,10 +846,19 @@ defmodule TienLenWeb.TableLive do
         </span>
         <p class="font-semibold truncate max-w-40">
           <span :if={@player.host} title="Chủ phòng">👑</span>
-          {TienLenWeb.Text.avatar(@player)} {@player.name}
+          {TienLenWeb.Text.avatar(@player)}<span
+            :if={TienLen.Shop.charm_icon(@player[:charm])}
+            id={"charm-#{@seat}"}
+            class="text-sm"
+            title="Bùa may mắn"
+          >{TienLen.Shop.charm_icon(@player[:charm])}</span>
+          {@player.name}
           <span :if={@seat == @view.me} class="text-xs text-base-content/60">(bạn)</span>
           <span :if={@player.bot} class="badge badge-info badge-xs" title="Máy chơi">🤖</span>
           <span :if={!@player.connected} class="badge badge-ghost badge-xs">mất kết nối</span>
+        </p>
+        <p :if={(@player[:titles] || []) != []} id={"titles-#{@seat}"} class="text-xs leading-tight">
+          <span :for={t <- @player.titles} title={t.name}>{t.emoji}</span>
         </p>
         <button
           :if={@player.bot && @view.host == @view.me && @view.status == :waiting}
@@ -876,6 +978,14 @@ defmodule TienLenWeb.TableLive do
       </form>
 
       <div class="flex flex-wrap justify-center gap-2">
+        <button
+          id="blow"
+          phx-click="blow"
+          class="btn btn-sm btn-outline btn-accent"
+          title="Không ảnh hưởng chia bài, hiệu quả tâm lý 100%"
+        >
+          🌬️ Thổi bài
+        </button>
         <button
           :if={length(@view.players) < 4}
           id="toggle-invite"

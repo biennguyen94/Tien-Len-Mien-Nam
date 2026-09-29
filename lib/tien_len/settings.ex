@@ -1,6 +1,7 @@
 defmodule TienLen.Settings do
   @moduledoc """
-  Settings editable by admins (AD9, F7): the economy values and the lobby announcement.
+  Settings editable by admins (AD9, F7): the economy values, the lobby announcement and the
+  seasonal event (EV1).
 
   Values live in the `settings` table and are cached in `:persistent_term`, so reading them is
   cheap and needs no database access (rooms and pure code read them freely). `put/2` writes
@@ -49,6 +50,9 @@ defmodule TienLen.Settings do
   @doc "The lobby announcement, or nil."
   def announcement, do: :persistent_term.get({__MODULE__, "announcement"}, nil)
 
+  @doc "The running seasonal event (EV1): `\"tet\"`, `\"trung_thu\"` or nil."
+  def event, do: :persistent_term.get({__MODULE__, "season_event"}, nil)
+
   @doc "Saves a validated value (string for the announcement, integer otherwise)."
   def put(key, value) do
     Repo.insert_all(
@@ -93,5 +97,6 @@ defmodule TienLen.Settings do
   defp encode(value) when is_binary(value), do: value
 
   defp decode("announcement", value), do: value
+  defp decode("season_event", value), do: value
   defp decode(_key, value), do: String.to_integer(value)
 end

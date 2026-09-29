@@ -113,7 +113,9 @@ defmodule TienLenWeb.UserAuthTest do
                  name: "An",
                  connected: true,
                  avatar: nil,
-                 card_back: "classic"
+                 card_back: "classic",
+                 charm: nil,
+                 titles: []
                }
              }
     end

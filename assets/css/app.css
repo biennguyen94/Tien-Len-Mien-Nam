@@ -134,8 +134,28 @@
 }
 .ticker { animation: ticker-in 0.3s ease-out; }
 
+/* SF1: the table shakes on a chop */
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-6px, 2px) rotate(-0.5deg); }
+  30% { transform: translate(6px, -2px) rotate(0.5deg); }
+  45% { transform: translate(-4px, 1px); }
+  60% { transform: translate(4px, -1px); }
+  80% { transform: translate(-2px, 0); }
+}
+.shake { animation: shake 0.45s ease-out; }
+
+/* TB1: a puff on the seat of a player blowing on the cards */
+@keyframes puff {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
+  20% { opacity: 1; transform: translate(-50%, -6px) scale(1.2); }
+  70% { opacity: 1; transform: translate(-50%, -14px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -24px) scale(1.4); }
+}
+.puff { animation: puff 2s ease-out forwards; }
+
 @media (prefers-reduced-motion: reduce) {
-  .throw-mark, .slipper-drop, .ticker { animation: none; }
+  .throw-mark, .slipper-drop, .ticker, .shake, .puff { animation: none; }
 }
 
 /* SH1: table themes (the centre "felt"). Custom felts set their own text colour. */

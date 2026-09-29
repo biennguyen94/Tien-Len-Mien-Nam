@@ -1,7 +1,7 @@
 defmodule TienLenWeb.ShopLive do
   @moduledoc """
-  The shop (SH1–SH3): card backs and table themes, bought once with coins and equipped for
-  free. Prices, ownership and the balance are all checked by `TienLen.Shop`; this page only
+  The shop (SH1–SH3, TB2): card backs, table themes and charms, bought once with coins and
+  equipped for free. Prices, ownership and the balance are all checked by `TienLen.Shop`; this page only
   sends item ids.
   """
 
@@ -31,6 +31,15 @@ defmodule TienLenWeb.ShopLive do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, Text.reason(reason))}
     end
+  end
+
+  def handle_event("remove_charm", _params, socket) do
+    {:ok, user} = Shop.remove_charm(socket.assigns.current_user)
+
+    {:noreply,
+     socket
+     |> assign(:current_user, %{user | coins: socket.assigns.current_user.coins})
+     |> put_flash(:info, "Đã tháo bùa")}
   end
 
   def handle_event("equip", %{"id" => id}, socket),
@@ -99,6 +108,34 @@ defmodule TienLenWeb.ShopLive do
             ]}>
               <p>{item.icon}</p>
             </div>
+          </.item_card>
+        </div>
+      </section>
+
+      <section id="shop-charms" class="space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-semibold">Bùa may mắn</h2>
+          <button
+            :if={Shop.equipped(@current_user, :charm)}
+            id="remove-charm"
+            phx-click="remove_charm"
+            class="btn btn-xs btn-ghost"
+          >
+            Tháo bùa
+          </button>
+        </div>
+        <p class="text-xs text-base-content/60">
+          Đeo cạnh avatar, ai cũng thấy. Hiệu quả tâm lý 100%, hiệu quả thật 0% (không ảnh hưởng chia bài).
+        </p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <.item_card
+            :for={item <- Shop.items(:charm)}
+            item={item}
+            owned={MapSet.member?(@owned, item.id)}
+            equipped={Shop.equipped(@current_user, :charm) == item.id}
+            coins={@current_user.coins}
+          >
+            <div class="text-4xl h-16 flex items-center">{item.icon}</div>
           </.item_card>
         </div>
       </section>

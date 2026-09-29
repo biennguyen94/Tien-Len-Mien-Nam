@@ -52,7 +52,7 @@ async function measure(page) {
     results.push(await snap(page, w, "lobby-logged-out"));
     await login(page, "ui_ben");
     const pages = ["/", "/bang-xep-hang", "/bang-xep-hang?tab=tuan", "/bang-xep-hang?tab=giau", "/lich-su", "/lich-su-coin",
-      "/nguoi-choi/ui_ben", "/nguoi-choi/ui_an", "/ban-be", "/cua-hang", "/quan-tri", "/quan-tri/nguoi-choi", "/quan-tri/phong",
+      "/nguoi-choi/ui_ben", "/nguoi-choi/ui_an", "/ban-be", "/cua-hang", "/tuong-xau-ho", "/quan-tri", "/quan-tri/nguoi-choi", "/quan-tri/phong",
       "/quan-tri/van", "/quan-tri/nhat-ky", "/quan-tri/cai-dat"];
     for (const path of pages) { await page.goto(B + path); await ready(page); results.push(await snap(page, w, path)); }
     // admin user page + replay

@@ -72,7 +72,12 @@ defmodule TienLenWeb.LeaderboardLive do
       announcement={@announcement}
       social={@social}
     >
-      <h1 class="text-xl font-bold">Bảng xếp hạng</h1>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h1 class="text-xl font-bold">Bảng xếp hạng</h1>
+        <.link navigate={~p"/tuong-xau-ho"} id="shame-link" class="btn btn-sm btn-outline">
+          🙈 Tường xấu hổ
+        </.link>
+      </div>
       <div role="tablist" class="tabs tabs-box w-fit">
         <.link
           patch={~p"/bang-xep-hang"}

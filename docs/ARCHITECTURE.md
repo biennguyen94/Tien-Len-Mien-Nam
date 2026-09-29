@@ -90,6 +90,7 @@ A crashed room is not restarted: its players return to the lobby. Everything in 
 | `TienLen.Replay` | Frames of a stored replay | V5 |
 | `TienLen.Commentary` | Public events of one change → funny commentator lines (template pick injected) | BL1, BL2, RC1 |
 | `TienLen.Throws` | Throwable items (🍅 🥚 🩴 🌹), prices, cooldown | TH1–TH3 |
+| `TienLen.BotTalk` | Bot personalities: names, avatars, speed, lines from public events | BP1–BP4 |
 
 **Processes** (in memory):
 
@@ -115,15 +116,17 @@ A crashed room is not restarted: its players return to the lobby. Everything in 
 | `TienLen.Friends` | Friend requests and friendships |
 | `TienLen.Missions` | Daily missions and their rewards |
 | `TienLen.Seasons` | Weekly seasons, standings, payouts |
-| `TienLen.Shop` | Card backs and table themes: catalogue, owned items, buy (one transaction with `Economy.spend/5`), equip | SH1–SH3 |
+| `TienLen.Shop` | Card backs, table themes and charms: catalogue, owned items, buy (one transaction with `Economy.spend/5`), equip | SH1–SH3, TB2 |
+| `TienLen.Shame` | Shame titles of the week from recorded games; holders cached 60 s | XH1–XH4 |
+| `TienLen.Events` | Seasonal events (Tết lì xì with daily cap, Trung thu lanterns) | EV1–EV3 |
 
 ### 2.4 Database
 
 | Table | Content |
 |---|---|
-| `users` | `username` (unique, lowercase), `display_name`, `hashed_password`, `coins` (≥ 0 check), `daily_bonus_on`, `relief_on`, `role` (`player`/`admin`), `locked_at`, `accept_invites`, `muted_until`, `avatar`, `card_back`, `table_theme` |
+| `users` | `username` (unique, lowercase), `display_name`, `hashed_password`, `coins` (≥ 0 check), `daily_bonus_on`, `relief_on`, `role` (`player`/`admin`), `locked_at`, `accept_invites`, `muted_until`, `avatar`, `card_back`, `table_theme`, `charm` |
 | `games` | `room_id`, `ref` (`room:<id>:game:<n>`), `player_count`, `instant_win`, `finished_at`, `replay` (jsonb: seats, dealt hands, public events) |
-| `game_players` | `game_id`, `user_id`, `seat`, `place`, `won`, `removed`, `chops`, `coins`, `instant` |
+| `game_players` | `game_id`, `user_id`, `seat`, `place`, `won`, `removed`, `chops`, `coins`, `instant`, `thoi`, `cong`, `passes`, `plays`, `timeouts` |
 | `coin_transactions` | Append-only ledger: `user_id`, `counterparty_id`, `amount`, `balance_after`, `reason`, `ref` |
 | `coin_settlements` | Idempotency keys (game settlements, daily claims, missions, season rewards) |
 | `admin_actions` | Audit log: admin, action, target, details, reason |
@@ -155,7 +158,7 @@ Only games without bots are recorded (B3). Chat messages are never stored (CH2).
 }
 ```
 
-`%Room{}` wraps it with seats (`%{player_id, name, connected, avatar, card_back, bot?}`), host, status, stake, private flag, banned ids, `game_players` (seat → user id), `game_no` and `game_chops`.
+`%Room{}` wraps it with seats (`%{player_id, name, connected, avatar, card_back, charm, titles, bot?, persona?}`), host, status, stake, private flag, banned ids, `game_players` (seat → user id), `game_no` and `game_chops`.
 
 ### 2.6 Game state machine
 
@@ -195,10 +198,12 @@ TableLive (player id = user id from the session)
                          at game over: Stats.record(result + coins + replay) →
                          PubSub {:room_updated, id, version, events} on "room:<id>" →
                          each page re-reads its own projection (RoomServer.view / spectator_view) →
-                         Commentary.lines(old room, new room, events) → {:room_chat, …} (system)
+                         Commentary.effects → {:effects, id, kinds} (sounds) →
+                         Commentary.lines(old room, new room, events) → {:room_chat, …} (system) →
+                         Tết: Events.lixi for 1st places → BotTalk.lines → {:room_chat, …} (bot)
 ```
 
-Events carry public facts only. Chat (`{:room_chat, …}`, commentator lines have `system: true`), reactions (`{:reaction, …}`), throws (`{:thrown, id, from_seat, to_seat, item}`) and spectator counts use the same room topic. The flight of a thrown item is the `Throws` JS hook (looks only); the mark on the seat is rendered by the server.
+Events carry public facts only. Chat (`{:room_chat, …}`, commentator lines have `system: true`), reactions (`{:reaction, …}`), throws (`{:thrown, id, from_seat, to_seat, item}`), effects (`{:effects, id, kinds}`), blowing (`{:blow, id, seat}`) and spectator counts use the same room topic. Sounds are synthesised by the `Sfx` JS hook (Web Audio) from the effect kinds. The flight of a thrown item is the `Throws` JS hook (looks only); the mark on the seat is rendered by the server.
 
 **PubSub topics:**
 - `room:<id>`;
@@ -229,7 +234,8 @@ Never broadcast: hands, undealt cards, seeds, selections. Instant-win hands are 
 | `/lich-su`, `/lich-su-coin` | Game history (replay links), coin ledger | logged in |
 | `/nguoi-choi/:username` | Profile, avatar picker, friend button | logged in |
 | `/ban-be` | Friends | logged in |
-| `/cua-hang` | Shop: card backs, table themes | logged in |
+| `/cua-hang` | Shop: card backs, table themes, charms | logged in |
+| `/tuong-xau-ho` | Shame titles of this / last week | logged in |
 | `/quan-tri/*` | Dashboard, users, rooms (watch / close / kick), games, audit log, settings | admins |
 | `POST /dang-nhap`, `DELETE /dang-xuat` | Session controller (login throttle, `next`) | – |
 

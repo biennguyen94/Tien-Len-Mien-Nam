@@ -158,8 +158,8 @@ defmodule TienLen.BotTest do
       assert [
                %{bot: nil},
                %{bot: nil},
-               %{bot: :easy, name: "Máy 1 (dễ)"},
-               %{bot: :normal, name: "Máy 2 (thường)"}
+               %{bot: :easy, name: "Bà Tám (dễ)", avatar: "👵"},
+               %{bot: :normal, name: "Ông Cụ Non (thường)", avatar: "👴"}
              ] =
                view.players
 

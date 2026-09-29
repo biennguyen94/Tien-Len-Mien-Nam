@@ -62,6 +62,8 @@ defmodule TienLenWeb.Text do
     cannot_afford: "Bạn không đủ coin",
     already_owned: "Bạn đã có món này rồi",
     not_owned: "Bạn chưa mua món này",
+    blow_too_fast: "Thổi từ từ thôi, 3 giây một lần",
+    unknown_event: "Sự kiện không hợp lệ",
     not_online: "Người này không online",
     invites_off: "Người này không nhận lời mời",
     invite_pending: "Người này đang có lời mời khác",
@@ -135,14 +137,18 @@ defmodule TienLenWeb.Text do
     "mission" => "Nhiệm vụ ngày",
     "season_reward" => "Thưởng mùa giải",
     "throw" => "Ném đồ",
-    "shop" => "Mua ở cửa hàng"
+    "shop" => "Mua ở cửa hàng",
+    "lixi" => "Lì xì Tết"
   }
 
   @doc "A player's avatar (P3), or the default face."
-  def avatar(nil), do: "🙂"
+  def avatar(nil), do: "🙂" <> lantern()
   def avatar(%{avatar: avatar}), do: avatar(avatar)
-  def avatar(avatar) when is_binary(avatar), do: avatar
-  def avatar(_), do: "🙂"
+  def avatar(avatar) when is_binary(avatar), do: avatar <> lantern()
+  def avatar(_), do: "🙂" <> lantern()
+
+  # EV3: during Trung thu every avatar wears a lantern
+  defp lantern, do: if(TienLen.Settings.event() == "trung_thu", do: "🏮", else: "")
 
   @doc "Label of a ledger reason."
   def coin_reason(reason), do: Map.get(@coin_reasons, reason, reason)

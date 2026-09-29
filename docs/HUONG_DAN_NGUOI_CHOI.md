@@ -136,7 +136,9 @@ Coin chỉ dùng trong game. **Không nạp, không rút, không chuyển cho ng
 Coin chỉ mất đi theo hai cách, cả hai đều **chỉ để vui, không giúp thắng ván nào**:
 
 - **Ném đồ** vào người khác ở bàn (mục 4.6): 1–5 coin mỗi lần, dòng "Ném đồ" trong Lịch sử coin.
-- **Cửa hàng** (mục 4.7): mua mặt sau lá bài và bàn chơi, dòng "Mua ở cửa hàng".
+- **Cửa hàng** (mục 4.10): mua mặt sau lá bài, bàn chơi và bùa may mắn, dòng "Mua ở cửa hàng".
+
+Trong dịp **Tết** (khi admin bật sự kiện), mỗi ván **về nhất** (ván không có máy) được **lì xì** ngẫu nhiên 8–168 coin, tối đa 10 lần mỗi ngày. Dòng "Lì xì Tết" trong Lịch sử coin.
 
 ---
 
@@ -206,12 +208,35 @@ Coin chỉ mất đi theo hai cách, cả hai đều **chỉ để vui, không g
 - Mỗi người **3 giây** mới ném được một lần. Không đủ coin thì không ném được.
 - Ném đồ không ảnh hưởng gì tới ván bài.
 
-### 4.7 Cửa hàng (`/cua-hang`)
+### 4.7 Âm thanh và hiệu ứng 🔊
+
+- Có người đánh **heo** thì nghe tiếng "éc éc". **Chặt heo** thì có tiếng nổ và bàn rung. **Tới trắng** thì có pháo giấy.
+- Đến lượt bạn mà chỉ còn 5 giây thì nghe tiếng "tích tắc".
+- Nút **🔊 / 🔇** trên đầu bàn chơi dùng để tắt hoặc bật âm thanh. Lựa chọn được nhớ trên thiết bị đó. Âm thanh chỉ bắt đầu sau khi bạn chạm vào trang lần đầu (quy định của trình duyệt).
+
+### 4.8 Chơi với máy có tính cách 🤖
+
+Máy thêm vào phòng lần lượt là:
+
+- 👵 **Bà Tám**: nói nhiều, hay than "Bài xấu quá trời ơi!";
+- 👴 **Ông Cụ Non**: đánh chậm, "Thời trẻ tôi chặt heo cả làng!";
+- 😤 **Thanh Niên Nóng Tính**: đánh nhanh, bị chặt là "😡 Chơi vậy ai chơi!".
+
+Họ nói trong chat phòng và hiện bong bóng dưới ghế. Tính cách chỉ đổi lời thoại và tốc độ. Mức **dễ / thường** mới quyết định máy đánh giỏi hay dở, và máy không bao giờ biết bài của bạn.
+
+### 4.9 Thổi bài 🌬️ và bùa may mắn
+
+- Trong lúc chờ ván mới, bấm **"🌬️ Thổi bài"**: cả bàn thấy bạn phồng má thổi (3 giây một lần).
+- **Bùa may mắn** mua ở Cửa hàng: 🧄 🧿 🍀 🐸 🐈 📿 🪬, đeo cạnh avatar, ai cũng thấy.
+- Cả hai **không ảnh hưởng gì tới việc chia bài**: bài vẫn do server xáo ngẫu nhiên như mọi ván. Hiệu quả tâm lý 100%! 😄
+
+### 4.10 Cửa hàng (`/cua-hang`)
 
 - Bấm **"Cửa hàng"** trên thanh trên cùng (điện thoại: trong menu ☰).
 - **Mặt sau lá bài** (9 kiểu, 400–1.500 coin): mọi người trong phòng và người xem đều thấy trên xấp bài của bạn.
 - **Bàn chơi** (9 kiểu, 500–1.500 coin): chỉ **bạn** thấy bàn của mình.
 - Mỗi món mua **một lần, dùng mãi**; mua xong là dùng luôn. Đổi qua lại giữa các món đã có thì **miễn phí** (nút "Dùng"). Kiểu cổ điển luôn có sẵn.
+- **Bùa may mắn** (7 loại, 200–800 coin): đeo cạnh avatar. Nút "Tháo bùa" để tháo (miễn phí).
 - Không hoàn tiền, không tặng, không bán lại.
 
 ---
@@ -259,6 +284,29 @@ Coin chỉ mất đi theo hai cách, cả hai đều **chỉ để vui, không g
 Hết tuần, **3 hạng đầu** (phải về nhất ít nhất 1 lần) được thưởng **1.000 / 500 / 300 coin**. Server tự trả trong vòng 1 giờ sau khi tuần kết thúc.
 
 ---
+
+### 7.1 Tường xấu hổ 🙈
+
+Trang **"Tường xấu hổ"** (nút ở trang Bảng xếp hạng) trao danh hiệu "vinh dự" mỗi tuần, tính từ các ván đã ghi (không tính ván có máy):
+
+| Danh hiệu | Cho người |
+|---|---|
+| 🐷 Vua Thối Heo | thối nhiều heo nhất |
+| 🥶 Chúa Tể Cóng | bị cóng nhiều ván nhất |
+| 🙈 Thánh Bỏ Lượt | tỉ lệ bỏ lượt cao nhất (ít nhất 30 lượt đi trong tuần) |
+| 🔪 Đồ Tể | chặt heo nhiều nhất |
+| 🐢 Rùa Thần | để hết giờ nhiều nhất |
+
+Người đứng đầu đeo danh hiệu dưới tên ở bàn chơi và trên trang hồ sơ. Chỉ để vui, không mất coin. Mỗi thứ Hai bắt đầu tuần mới.
+
+### 7.2 Sự kiện theo mùa
+
+Admin có thể bật:
+
+- **Tết** 🧧: về nhất được lì xì (xem mục 3.3);
+- **Trung thu** 🏮: mọi avatar đội đèn lồng.
+
+Khi có sự kiện, dải thông báo màu vàng hiện ở đầu mọi trang.
 
 ## 8. Hồ sơ, lịch sử, xem lại ván, xem người khác chơi
 

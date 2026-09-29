@@ -100,6 +100,11 @@ Giá trị mới **có hiệu lực ngay cho các lần sau**, không làm thay 
 | Thưởng tuần: hạng 1 / 2 / 3 | 1.000 / 500 / 300 | đặt 0 để tắt thưởng hạng đó |
 
 - Để tắt một khoản thưởng, đặt nó về **0** (ví dụ khi thấy có người dùng nhiều tài khoản để "cày" nhiệm vụ).
+- **Sự kiện theo mùa**: chọn "Không có", "🧧 Tết" hoặc "🏮 Trung thu" rồi bấm "Lưu sự kiện" (có ghi Nhật ký).
+  - **Tết**: mỗi người về nhất một ván đã ghi (không có máy) nhận lì xì ngẫu nhiên 8–168 coin, tối đa 10 lần mỗi người mỗi ngày, dòng "Lì xì Tết" trong sổ coin. Coin này là coin **mới tạo ra** (như thưởng nhiệm vụ). Khi thấy có người "cày" lì xì, hãy tắt sự kiện.
+  - **Trung thu**: mọi avatar có 🏮. Không ảnh hưởng coin.
+  - Dải thông báo sự kiện hiện ở đầu mọi trang **từ lần tải trang tiếp theo**.
+  - Không có lịch tự bật/tắt: nhớ tắt khi hết dịp.
 - **Giá ném đồ** (1–5 coin) và **giá cửa hàng** (400–1.500 coin) **không** có trong trang này: chúng nằm trong code (`TienLen.Throws`, `TienLen.Shop`). Muốn đổi giá phải sửa code rồi deploy lại.
 - **Thông báo trên sảnh:**
   - nhập nội dung (tối đa 300 ký tự) rồi bấm "Cập nhật thông báo";
@@ -117,6 +122,8 @@ Giá trị mới **có hiệu lực ngay cho các lần sau**, không làm thay 
 - Chat không được lưu: khởi động lại máy chủ là mất hết, nên không còn bằng chứng sau đó. Nếu cần, hãy chụp màn hình trước khi xóa.
 - Dòng của **🎙️ Bình luận viên** trong chat phòng do server tự viết; admin xóa được như tin thường.
 - **Ném đồ** không tắt được cho từng người (theo quyết định của chủ dự án). Mỗi người chỉ ném được 3 giây một lần và phải trả coin. Nếu có người bị ném quá nhiều, họ có thể rời phòng; admin có thể mời người ném ra khỏi phòng.
+- **Tường xấu hổ** (`/tuong-xau-ho`) và danh hiệu ở bàn chơi được tính tự động mỗi tuần, admin không cần làm gì. Tài khoản bị khóa không được xếp danh hiệu.
+- Máy có tính cách (Bà Tám, Ông Cụ Non, Thanh Niên Nóng Tính) nói trong chat phòng; admin xóa được như tin thường.
 - Trong **Lịch sử coin** của người chơi có thêm hai loại dòng: **"Ném đồ"** (ghi món và mã phòng) và **"Mua ở cửa hàng"** (ghi tên món). Đây là coin bị tiêu đi, không chuyển cho ai.
 - Thưởng tuần được trả **tự động** trong vòng 1 giờ sau khi tuần kết thúc (thứ Hai 00:00 giờ Việt Nam), và mỗi hạng chỉ được trả một lần. Tab "Tuần trước" ở Bảng xếp hạng cho biết đã trao cho ai.
 

@@ -25,7 +25,8 @@ defmodule TienLenWeb.Admin.SettingsLive do
   defp load(socket) do
     assign(socket,
       values: Map.new(@labels, fn {k, _} -> {k, Settings.int(k)} end),
-      text: Settings.announcement() || ""
+      text: Settings.announcement() || "",
+      event: Settings.event() || "none"
     )
   end
 
@@ -40,6 +41,13 @@ defmodule TienLenWeb.Admin.SettingsLive do
   def handle_event("announce", %{"text" => text}, socket) do
     case TienLen.Admin.announce(socket.assigns.current_user.id, text) do
       :ok -> {:noreply, socket |> put_flash(:info, "Đã cập nhật thông báo") |> load()}
+      error -> {:noreply, put_flash(socket, :error, error_text(error))}
+    end
+  end
+
+  def handle_event("set_event", %{"event" => event}, socket) do
+    case TienLen.Admin.set_event(socket.assigns.current_user.id, event) do
+      :ok -> {:noreply, socket |> put_flash(:info, "Đã cập nhật sự kiện") |> load()}
       error -> {:noreply, put_flash(socket, :error, error_text(error))}
     end
   end
@@ -78,6 +86,22 @@ defmodule TienLenWeb.Admin.SettingsLive do
           />
         </label>
         <button class="btn btn-primary btn-sm sm:col-span-2">Lưu</button>
+      </form>
+      <form id="event-form" phx-submit="set_event" class="card bg-base-200 p-4 space-y-2">
+        <label for="event-select">Sự kiện theo mùa</label>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="event-select" name="event" class="select select-bordered select-sm">
+            <option value="none" selected={@event == "none"}>Không có</option>
+            <option value="tet" selected={@event == "tet"}>🧧 Tết (ván về nhất nhận lì xì)</option>
+            <option value="trung_thu" selected={@event == "trung_thu"}>
+              🏮 Trung thu (avatar đội đèn lồng)
+            </option>
+          </select>
+          <button class="btn btn-sm">Lưu sự kiện</button>
+        </div>
+        <p class="text-xs text-base-content/60">
+          Lì xì Tết: 8–168 coin mỗi lần về nhất (ván không có máy), tối đa 10 lần mỗi người mỗi ngày.
+        </p>
       </form>
       <form id="announce-form" phx-submit="announce" class="card bg-base-200 p-4 space-y-2">
         <label>Thông báo trên sảnh (để trống để tắt)</label>

@@ -244,7 +244,8 @@ defmodule TienLen.FunExtrasTest do
     test "every item has a known kind and a unique id; one free default per kind" do
       ids = Enum.map(Shop.items(), & &1.id)
       assert ids == Enum.uniq(ids)
-      assert Enum.all?(Shop.items(), &(&1.kind in [:card_back, :table]))
+      assert Enum.all?(Shop.items(), &(&1.kind in [:card_back, :table, :charm]))
+      assert Enum.filter(Shop.items(:charm), &(&1.price == 0)) == []
       assert [%{id: "classic"}] = Enum.filter(Shop.items(:card_back), &(&1.price == 0))
       assert [%{id: "felt"}] = Enum.filter(Shop.items(:table), &(&1.price == 0))
       assert Shop.valid("felt", :card_back) == "classic"
@@ -254,7 +255,7 @@ defmodule TienLen.FunExtrasTest do
     test "the card back is taken into the room and shown to others" do
       {:ok, id} = RoomServer.start_room(recorder: nil)
       on_exit(fn -> if pid = RoomServer.whereis(id), do: Process.exit(pid, :kill) end)
-      {:ok, _} = RoomServer.join(id, 1, "An", nil, "lixi")
+      {:ok, _} = RoomServer.join(id, 1, "An", nil, %{card_back: "lixi"})
       {:ok, _} = RoomServer.join(id, 2, "Binh")
       view = RoomServer.view(id, 2)
       assert [%{card_back: "lixi"}, %{card_back: nil}] = view.players

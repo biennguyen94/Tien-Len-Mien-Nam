@@ -215,7 +215,9 @@ defmodule TienLenWeb.TableLiveTest do
         :throw_too_fast,
         :cannot_afford,
         :already_owned,
-        :not_owned
+        :not_owned,
+        :blow_too_fast,
+        :unknown_event
       ]
 
       assert Enum.sort(reasons) == Enum.sort(Text.known_reasons())

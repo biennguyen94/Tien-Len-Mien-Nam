@@ -51,6 +51,7 @@ defmodule TienLenWeb.Router do
       live "/nguoi-choi/:username", ProfileLive
       live "/ban-be", FriendsLive
       live "/cua-hang", ShopLive
+      live "/tuong-xau-ho", ShameLive
     end
   end
 
