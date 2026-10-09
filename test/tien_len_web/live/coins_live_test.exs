@@ -124,14 +124,14 @@ defmodule TienLenWeb.CoinsLiveTest do
       assert render(an) =~ "Tiền cược phải là 0 hoặc từ 10 trở lên"
     end
 
-    test "a player without 10×S is told so, and a start without 2 eligible players is refused" do
-      id = coin_room!(200, %{0 => "3D 9H", 1 => "4S 9C"})
+    test "a player without 2×S is told so, and a start without 2 eligible players is refused" do
+      id = coin_room!(600, %{0 => "3D 9H", 1 => "4S 9C"})
       {:ok, an, _} = live(login_conn("An"), ~p"/phong/#{id}")
       {:ok, _binh, _} = live(login_conn("Binh"), ~p"/phong/#{id}")
 
-      assert has_element?(an, "#not-eligible", "2.000")
+      assert has_element?(an, "#not-eligible", "1.200")
       an |> element("#start") |> render_click()
-      assert render(an) =~ "Cần ít nhất 2 người có đủ 10× tiền cược"
+      assert render(an) =~ "Cần ít nhất 2 người có đủ 2× tiền cược"
     end
   end
 

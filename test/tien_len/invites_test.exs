@@ -113,7 +113,7 @@ defmodule TienLen.InvitesTest do
   end
 
   test "accepting re-checks the coins for the stake", %{a: a, b: b} do
-    id = room!(stake: 200)
+    id = room!(stake: 600)
     {:ok, _} = RoomServer.join(id, a.id, "An")
     {:ok, %{id: inv}} = Invites.invite(a.id, b.id, id)
     assert Invites.accept(b.id, inv) == {:error, :not_enough_coins_to_join}
