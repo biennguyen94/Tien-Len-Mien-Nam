@@ -98,6 +98,23 @@ defmodule TienLen.CoinsRoomTest do
     assert Economy.balance(b.id) == 1_200
   end
 
+  test "cóng: the last player still holding 13 cards pays Nhất 1×S more (T24a, C11)" do
+    [a, b] = users = Enum.map(~w(An Binh), &user!/1)
+    id = room!(100, %{0 => "3D", 1 => "4S 5S 6S 7S 8S 9S 10S JS QS KS AS 2S 2H"})
+    for u <- users, do: {:ok, _} = RoomServer.join(id, u.id, u.display_name)
+    :ok = RoomServer.start_game(id, a.id)
+    :ok = RoomServer.play(id, a.id, cards("3D"))
+
+    # place 100 + thối 2S 2H (300) + cóng 100
+    assert Economy.balance(a.id) == 1_500
+    assert Economy.balance(b.id) == 500
+
+    reasons = b.id |> Economy.history() |> Enum.map(&{&1.reason, &1.amount})
+    assert {"cong", -100} in reasons
+    assert {"thoi", -300} in reasons
+    assert {"place", -100} in reasons
+  end
+
   test "stake 0 moves no coins" do
     [a, b] = users = Enum.map(~w(An Binh), &user!/1)
     id = room!(0, %{0 => "3D", 1 => "4S 2H"})
@@ -107,21 +124,21 @@ defmodule TienLen.CoinsRoomTest do
     assert Economy.balance(a.id) == 1_000 and Economy.balance(b.id) == 1_000
   end
 
-  test "eligibility: only players with 10×S are dealt in (E7)" do
+  test "eligibility: only players with 2×S are dealt in (E7, C12)" do
     [a, b, c] = users = Enum.map(~w(An Binh Chi), &user!/1)
     id = room!(100, %{0 => "3D 9H", 2 => "4S 9C"})
     for u <- users, do: {:ok, _} = RoomServer.join(id, u.id, u.display_name)
 
-    # b drops below 1,000
-    {:ok, _} = Economy.settle("drain", [%{from: b.id, to: c.id, amount: 1, reason: "test"}])
+    # b drops below 200
+    {:ok, _} = Economy.settle("drain", [%{from: b.id, to: c.id, amount: 801, reason: "test"}])
     :ok = RoomServer.start_game(id, a.id)
     assert RoomServer.view(id, a.id).game.seats == [0, 2]
     assert RoomServer.view(id, b.id).game.hand == []
   end
 
-  test "the start is refused when fewer than 2 players have 10×S" do
+  test "the start is refused when fewer than 2 players have 2×S" do
     [a, b] = users = Enum.map(~w(An Binh), &user!/1)
-    id = room!(200, %{})
+    id = room!(600, %{})
     for u <- users, do: {:ok, _} = RoomServer.join(id, u.id, u.display_name)
     assert RoomServer.start_game(id, a.id) == {:error, :not_enough_coins}
     assert RoomServer.view(id, b.id).status == :waiting

@@ -140,7 +140,7 @@ Tien-Len-Mien-Nam/
 
 - [x] Pure `TienLen.Payout`: from a finished game (ranking, instant winners, final hands) and the round's chop chains → transfers (T21–T24).
 - [x] `Game` records chop chains (start, every chop, owner, value) and emits them when a round or the game ends.
-- [x] Room stake (0 or ≥ 10, changeable between games), eligibility 10×S, `RoomServer` applies chain settlements at round end and the rest at game over through `Economy`.
+- [x] Room stake (0 or ≥ 10, changeable between games), eligibility 10×S (2×S since C12), `RoomServer` applies chain settlements at round end and the rest at game over through `Economy`.
 - Tests: every example in RULES T21–T24, chains of 1–4 chops, out-of-turn four-pair in a chain, removed players, instant win with several winners, insufficient balances, stake 0, idempotency across retries.
 
 ## Phase 17 — Coins: UI — DONE (2026-09-28)

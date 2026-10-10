@@ -1,24 +1,24 @@
 defmodule TienLen.Payout do
   @moduledoc """
-  Turns a game's outcome into coin debts (RULES T21–T24; C4–C8, E1–E4). Pure.
+  Turns a game's outcome into coin debts (RULES T21–T24a; C4–C8, E1–E4). Pure.
 
   Debts are expressed between **seats**: `%{from: seat, to: seat, amount: coins, reason: r}`.
   `TienLen.RoomServer` maps seats to accounts and `TienLen.Economy.settle/3` applies them with
   the balance caps of T25. With stake 0 every function returns `[]`.
 
-  Reasons: `"place"`, `"instant_win"`, `"chop"`, `"thoi"`.
+  Reasons: `"place"`, `"instant_win"`, `"chop"`, `"thoi"`, `"cong"`.
   """
 
   alias TienLen.Game
 
-  @doc "Debts due at game over: instant-win payments, or place payments plus thối heo."
+  @doc "Debts due at game over: instant-win payments, or place payments plus thối heo and cóng."
   @spec game_over(Game.t(), non_neg_integer()) :: [map()]
   def game_over(_game, 0), do: []
 
   def game_over(%Game{phase: :finished} = game, stake) do
     if Game.instant_win?(game),
       do: instant_win(game, stake),
-      else: places(game.ranking, stake) ++ thoi(game, stake)
+      else: places(game.ranking, stake) ++ thoi(game, stake) ++ cong(game, stake)
   end
 
   @doc """
@@ -52,19 +52,39 @@ defmodule TienLen.Payout do
   red 2×S) to the player ranked just above. Removed players never pay thối.
   """
   def thoi(%Game{} = game, stake) do
-    ranked = Enum.map(game.ranking, fn [seat] -> seat end)
-
-    case Enum.find_index(ranked, &(&1 not in game.finished and &1 not in game.removed)) do
+    case last_holder(game) do
       nil ->
         []
 
-      0 ->
-        []
-
-      i ->
-        loser = Enum.at(ranked, i)
+      {loser, above, _first} ->
         units = Game.twos_units(game.hands[loser])
-        if units > 0, do: [debt(loser, Enum.at(ranked, i - 1), units * stake, "thoi")], else: []
+        if units > 0, do: [debt(loser, above, units * stake, "thoi")], else: []
+    end
+  end
+
+  @doc """
+  Cóng (T24a, C11): the last player still holding cards who still holds all 13 cards pays an
+  extra 1×S to Nhất. Removed players are never cóng.
+  """
+  def cong(%Game{} = game, stake) do
+    case last_holder(game) do
+      {loser, _above, first} ->
+        if length(game.hands[loser]) == 13, do: [debt(loser, first, stake, "cong")], else: []
+
+      nil ->
+        []
+    end
+  end
+
+  # {last player still holding cards, the player ranked just above, Nhất}, or nil when there
+  # is none or they rank 1st (all the others were removed).
+  defp last_holder(game) do
+    ranked = Enum.map(game.ranking, fn [seat] -> seat end)
+
+    case Enum.find_index(ranked, &(&1 not in game.finished and &1 not in game.removed)) do
+      nil -> nil
+      0 -> nil
+      i -> {Enum.at(ranked, i), Enum.at(ranked, i - 1), hd(ranked)}
     end
   end
 

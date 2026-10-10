@@ -77,8 +77,8 @@ defmodule TienLen.Room do
   def valid_stake?(stake),
     do: stake == 0 or (is_integer(stake) and stake >= 10 and stake <= @max_stake)
 
-  @doc "Minimum balance to be dealt in (C9): 10×S."
-  def min_balance(%__MODULE__{stake: stake}), do: 10 * stake
+  @doc "Minimum balance to be dealt in (C9, C12): 2×S."
+  def min_balance(%__MODULE__{stake: stake}), do: 2 * stake
 
   @doc "The host changes the stake, between games only (E7)."
   @spec set_stake(t(), player_id(), term()) :: result()
@@ -300,7 +300,7 @@ defmodule TienLen.Room do
       |> Enum.map(&elem(&1, 0))
       |> Enum.sort()
 
-    # E7: with a stake, only players with at least 10×S are dealt in. `balances` is
+    # E7, C12: with a stake, only players with at least 2×S are dealt in. `balances` is
     # %{player_id => coins}; `nil` means no economy (tests), so nobody is filtered.
     participants =
       if room.stake > 0 and is_map(balances),

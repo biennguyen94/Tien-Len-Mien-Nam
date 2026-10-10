@@ -119,7 +119,7 @@ Coin chỉ dùng trong game. **Không nạp, không rút, không chuyển cho ng
 ### 3.2 Cược trong phòng
 
 - Chủ phòng đặt **"Tiền cược mỗi ván"** (gọi là S): **0 = chơi vui**, không mất coin; hoặc từ **10** trở lên.
-- Muốn được chia bài, bạn phải có ít nhất **10 × S** coin. Không đủ thì bạn ngồi xem, và game hiện thông báo cho bạn.
+- Muốn được chia bài, bạn phải có ít nhất **2 × S** coin. Không đủ thì bạn ngồi xem, và game hiện thông báo cho bạn.
 - **Tiền hạng** cuối ván:
   - 4 người: Bét trả Nhất S, Ba trả Nhì S/2;
   - 3 hoặc 2 người: Bét trả Nhất S.
@@ -128,6 +128,7 @@ Coin chỉ dùng trong game. **Không nạp, không rút, không chuyển cho ng
   - heo đen (♠ ♣) = 1 × S, heo đỏ (♦ ♥) = 2 × S, đôi heo = tổng hai con;
   - khi hết vòng, người có heo hoặc hàng bị chặt cuối cùng trả người chặt cuối cùng: **giá trị × số lần chặt trong chuỗi** (chặt chồng thì nhân lên).
 - **Thối heo:** hết ván mà người Bét còn heo trên tay thì trả người xếp ngay trên mình 1 × S cho mỗi heo đen, 2 × S cho mỗi heo đỏ.
+- **Cóng (nhốt bài 13 lá):** hết ván mà người Bét vẫn còn nguyên 13 lá thì trả thêm Nhất 1 × S (tức trả Nhất tổng cộng 2 × S), cộng thêm thối heo nếu có.
 - Nếu không đủ coin để trả, bạn chỉ trả tối đa số coin đang có. Số coin không bao giờ âm.
 - Xem mọi khoản ở **"Lịch sử coin"** (bấm vào số 🪙 trên thanh trên cùng).
 
@@ -327,7 +328,7 @@ Khi có sự kiện, dải thông báo màu vàng hiện ở đầu mọi trang.
 ## 9. Câu hỏi thường gặp
 
 - **Sao nút "Đánh" bị mờ?** Bộ bạn chọn chưa đánh được. Chữ trên nút cho biết lý do, hoặc bạn thử "Gợi ý".
-- **Sao tôi không được chia bài?** Có thể bạn không đủ 10 × tiền cược, hoặc bạn vào phòng lúc ván đang chơi (phải chờ ván sau).
+- **Sao tôi không được chia bài?** Có thể bạn không đủ 2 × tiền cược, hoặc bạn vào phòng lúc ván đang chơi (phải chờ ván sau).
 - **Hết coin thì sao?** Mỗi ngày nhận thưởng ngày. Còn dưới 100 coin thì nhận cứu trợ. Và bạn vẫn chơi được phòng cược 0.
 - **Quên mật khẩu?** Liên hệ quản trị viên để được đặt lại mật khẩu tạm, rồi đổi mật khẩu ở sảnh.
 - **Thấy bị cấm chat?** Quản trị viên có thể cấm chat 10 phút, 1 giờ hoặc 24 giờ. Bạn vẫn chơi bình thường.

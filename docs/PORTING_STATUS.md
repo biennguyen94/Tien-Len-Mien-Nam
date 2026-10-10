@@ -1,6 +1,6 @@
 # Porting status
 
-Last updated: 2026-09-29
+Last updated: 2026-10-09
 
 | Phase | Name | Status |
 |---|---|---|
@@ -181,7 +181,7 @@ Interpretations taken to implement A1–A4 (confirm or override):
 | C6 | **Chặt heo:** a black 2 (♠ ♣) is worth **1×S**, a red 2 (♦ ♥) **2×S**; a pair of 2s is the sum. The owner of the chopped 2s pays the chopper. |
 | C7 | **Chặt chồng:** the **last chopped player pays the whole chain** to the last chopper. |
 | C8 | **Thối heo:** at the end of a game, the **Bét** player pays for each 2 still in hand (black 1×S, red 2×S) to the **player ranked just above** them. |
-| C9 | **Not enough coins:** a player is dealt in only with a balance of **at least 10×S**. If a debt is still larger than the balance, they pay **all they have** (never negative); several creditors share it proportionally. The total stays 0. |
+| C9 | **Not enough coins:** a player is dealt in only with a balance of **at least 10×S** (2×S since C12). If a debt is still larger than the balance, they pay **all they have** (never negative); several creditors share it proportionally. The total stays 0. |
 | C10 | **Server-side and transaction-safe.** The game/room decides the results; an economy layer applies them. The client never sends amounts. |
 
 Interpretations taken to implement C1–C10 — **approved by the owner (2026-09-28)**:
@@ -194,7 +194,7 @@ Interpretations taken to implement C1–C10 — **approved by the owner (2026-09
 | E4 | **Thối heo** is paid by the last player still **holding cards** at the end, to the player ranked just above. Removed players never pay thối (their cards were discarded). No thối in instant-win games. |
 | E5 | **Proportional sharing** when a debtor cannot pay everything (C9): each creditor gets ⌊owed × paid / total owed⌋; the few coins left over by rounding go to the creditors in ranking order. |
 | E6 | **Settlement timing:** a chop chain is settled when its round ends; place payments, thối and instant-win payments at game over. All are in one database transaction each, recorded once per game (idempotent). |
-| E7 | **Eligibility:** a new game is dealt to the connected seated players with a balance ≥ 10×S (C9, together with X6). If fewer than 2 are eligible, the start is refused. The host sets S when opening the room and may change it **between games only**. |
+| E7 | **Eligibility:** a new game is dealt to the connected seated players with a balance ≥ 10×S (2×S since C12) (C9, together with X6). If fewer than 2 are eligible, the start is refused. The host sets S when opening the room and may change it **between games only**. |
 | E8 | **Daily bonus** is claimed with a button, once per Vietnam calendar day (UTC+7). **Relief** is claimed with a button when the balance is **below 100**, at most once per Vietnam day. |
 | E9 | Existing accounts receive the 1,000 starting coins when the coin feature is deployed. |
 
@@ -353,6 +353,15 @@ The owner picked #3, #4, #5, #7 and #9 and asked to implement them "cu thay hop 
 | EV1 | **Seasonal event**, chosen by an admin on "Cài đặt" (audited): none (default), **Tết** or **Trung thu**. A banner on every page while it runs. No automatic calendar. |
 | EV2 | **Tết**: every 1st place of a recorded game gets a random **lì xì** of 8, 18, 28, 38, 58, 68, 88 or 168 coins (small amounts more likely), at most **10 per player per Vietnam day**, ledger reason `lixi`, idempotent per game and player; the commentator announces it. |
 | EV3 | **Trung thu**: every avatar wears a 🏮. |
+
+### Batch 16 — cóng penalty, lower eligibility (owner, 2026-10-09)
+
+The owner asked for a penalty for being **cóng** ("nhốt bài 13 con") and to lower the eligibility from 10×S to 2×S. The amount of the cóng penalty was **taken by Claude** and can be overridden.
+
+| # | Decision |
+|---|---|
+| C11 | **Cóng** (nhốt 13 lá): at a normal game over (not an instant win), the last player still holding cards who still holds **all 13 cards** pays an extra **1×S to Nhất** (so 2×S to Nhất in total with the place payment), ledger reason `cong`. Thối heo (C8) is still paid on top. Removed players are never cóng. |
+| C12 | **Eligibility lowered:** a player is dealt in with a balance of **at least 2×S** (was 10×S; supersedes the first sentence of C9 and the amount in E7). Larger debts are still capped by T25. |
 
 ### Project decisions
 
@@ -1377,6 +1386,22 @@ On a narrowed laptop window the same happened below 640 px. Between 640 and ~900
   - the pages: pig sound pushed, puff, bot bubble, charm and title at the table and on the profile, the wall, the event banner.
 - Headless Chromium: `audit.js` **91/91 OK** with `/tuong-xau-ho`. It first found the bot speech bubble overflowing at 360 / 390 px (above the right seat); the bubble now sits under its seat, as wide as the seat, at most 3 lines.
 - NOT VERIFIED: how the sounds actually sound, and the emoji, in a real browser (headless Chromium has no audio output and no emoji font).
+
+## Batch 16 results — cóng penalty, eligibility 2×S (2026-10-09)
+
+### Delivered
+
+- **Cóng (C11, T24a)**: `TienLen.Payout.cong/2`, added to `game_over/2` after thối heo; the last holder with all 13 cards pays 1×S to Nhất, ledger reason `cong` (label "Bị cóng" in the coin history). `thoi/2` and `cong/2` share one private `last_holder/1`.
+- **Eligibility 2×S (C12, T20)**: `Room.min_balance/1` is now `2 * stake`; it is also what invites check when accepting, and what the table shows ("cần … coin"). Error text "Cần ít nhất 2 người có đủ 2× tiền cược".
+- Docs: `RULES.md` T20, T24a; player guide §3.2; decision batch 16.
+
+### VERIFIED
+
+- `mix test`: **450 tests, 0 failures** (twice), `mix format --check-formatted` and `compile --warnings-as-errors` clean. Run in a cloud container with Elixir 1.18.4 / OTP 25 and a local PostgreSQL 16 (the `E` regex flag in `config/runtime.exs` removed in a scratch copy only, it needs Elixir 1.19+). New or changed tests:
+  - payout: cóng with thối heo (place 100 + thối 300 + cóng 100), no cóng after a card was played;
+  - room with the real Economy: 13-card loser ends at 500 / winner 1,500, ledger `cong -100`;
+  - eligibility, refused start, invites and the table page with the 2×S threshold.
+- NOT VERIFIED: on the owner's toolchain (Elixir 1.20.4 / OTP 28) and in a real browser.
 
 ## Environment state
 

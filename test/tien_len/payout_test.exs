@@ -185,6 +185,26 @@ defmodule TienLen.PayoutTest do
              ]
     end
 
+    test "cóng: the last player still holding all 13 cards also pays 1×S to Nhất (T24a)" do
+      g = start([a: "3S", c: "3C 9C", b: "4S 5S 6S 7S 8S 9S 10S JS QS KS AS 2S 2H"], leader: :a)
+      # a finishes with 3S; c beats with 9C, b passes; c leads 3C and finishes: b never played
+      {g, _} = run(g, [{:play, :a, "3S"}, {:play, :c, "9C"}, {:pass, :b}, {:play, :c, "3C"}])
+      assert g.ranking == [[:a], [:c], [:b]]
+      assert length(g.hands[:b]) == 13
+
+      assert Payout.game_over(g, 100) == [
+               %{from: :b, to: :a, amount: 100, reason: "place"},
+               %{from: :b, to: :c, amount: 300, reason: "thoi"},
+               %{from: :b, to: :a, amount: 100, reason: "cong"}
+             ]
+    end
+
+    test "no cóng when the last player has played a card (T24a)" do
+      g = start([a: "3S", b: "4S 2S 2H", c: "5S 9C"], leader: :a)
+      {g, _} = run(g, [{:play, :a, "3S"}, {:pass, :b}, {:play, :c, "5S"}, {:play, :c, "9C"}])
+      assert Payout.cong(g, 100) == []
+    end
+
     test "removed players never pay thối (E4)" do
       g = start([a: "3S", b: "4S 9H", c: "2S 2H 9C"], leader: :a)
       {g, _} = run(g, [{:play, :a, "3S"}])
